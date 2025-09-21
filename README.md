@@ -21,7 +21,6 @@ Deployment on Cloud Infrastructure: Containerize and manage the inference stack 
 Benchmarking and Best Practices: Develop a standardized benchmarking suite to compare configurations, analyze results, and compile findings into a final report.
 
 Stretch Goals: 
-- Investigate how agents, model control planes (MCP servers), and inference engines can be integrated to automate more complex workflows.
 - Heterogeneous Scheduling: Explore strategies for efficiently distributing workloads across CPUs and accelerators, identifying where GPU offloading provides the most performance benefit.
 
 ## 2. Users/Personas Of The Project:

@@ -77,38 +77,97 @@ The phased approach allows for incremental complexity and performance measuremen
 
 ## 6. Release Planning:
 
-**Sprint 1 (09/24)**
-- Set up development environment and cloud access
-- Deploy basic vLLM infrastructure
-- Implement initial benchmarking suite
-- Establish baseline performance metrics
+**Sprint 1 (09/24 – 10/07)**  
+**Tasks:**  
+- Provision cloud resources (at least 2 providers: AWS/GCP or Azure)  
+- Deploy basic vLLM engine in a Kubernetes cluster  
+- Set up CI/CD pipeline for reproducible deployments  
+- Develop initial benchmarking suite (focus on latency, throughput, TTFT)  
+- Run baseline performance tests on CPU-only and single-GPU setups  
 
-**Sprint 2 (10/08)**
-- Integrate document processing pipeline
-- Deploy vector database and embedding model
-- Implement retrieval engine
-- Measure RAG-specific performance metrics
+**Deliverables:**  
+- Running vLLM inference service on the cloud  
+- First version of benchmarking toolkit  
+- Documented baseline metrics report  
 
-**Sprint 3 (10/29)**
-- Deploy Redis caching infrastructure
-- Implement all three cache types (embedding, query, response)
-- Optimize cache configurations
-- Measure cache performance impact
+**Sprint 2 (10/08 – 10/28)**  
+**Tasks:**  
+- Build and integrate document processing pipeline (text, PDFs, structured data)  
+- Deploy vector database (FAISS or Pinecone) and embedding model (sentence-transformers)  
+- Implement retrieval engine for similarity search  
+- Conduct RAG-specific benchmarking (retrieval latency, embedding throughput, query-response time)  
+- Run scalability tests with increasing dataset sizes  
 
-**Sprint 4 (11/05)**
-- Add orchestration layer for complex workflows
-- Implement agentic task management
-- Performance testing and optimization
+**Deliverables:**  
+- Functional document ingestion and processing pipeline  
+- Fully deployed vector database and embedding model  
+- Working retrieval engine integrated with RAG pipeline  
+- Performance report on RAG workloads, including retrieval-specific metrics  
 
-**Sprint 5 (11/19)**
-- Final performance testing and optimization
-- Generate comprehensive analysis report
-- Prepare final presentation materials
 
-**Final Presentation (12/08)**
-- Present project results and findings
-- Demonstrate benchmarking framework
-- Share best practices and recommendations
+**Sprint 3 (10/29 – 11/04)**  
+**Tasks:**  
+- Deploy Redis caching infrastructure (cluster mode with persistence enabled)  
+- Implement three cache types:  
+  - Embedding Cache  
+  - Query Cache  
+  - Response Cache  
+- Optimize cache configurations (eviction policies, memory allocation, sharding)  
+- Conduct A/B experiments to measure performance with vs. without caching  
+- Analyze cache hit/miss rates and their impact on end-to-end latency  
+
+**Deliverables:**  
+- Running Redis cluster with all cache types enabled  
+- Optimized cache configuration tuned for workload patterns  
+- Benchmark report showing cache performance improvements (latency, throughput, cost-efficiency)
+
+**Sprint 4 (11/05 – 11/18)**  
+**Tasks:**  
+- Deploy orchestration layer for complex workflows (Kubernetes-native orchestration + workflow engine)  
+- Integrate MCP Server for model context protocol management  
+- Implement agentic task management (multi-step workflows, tool integration, decision branching)  
+- Enable heterogeneous scheduling (dynamic CPU/GPU task routing based on workload)  
+- Conduct stress testing and workflow-level benchmarking (latency, throughput, fault tolerance)  
+- Document system behavior under scaling and failure scenarios  
+
+**Deliverables:**  
+- Fully functional orchestration layer integrated with inference stack  
+- MCP Server deployed and connected with agentic workflows  
+- Heterogeneous scheduler tested on mixed CPU/GPU workloads  
+- Benchmark report on complex agentic workflows  
+- Documentation of fault tolerance, scaling behavior, and workflow resilience  
+
+
+**Sprint 5 (11/19 – 12/07)**  
+**Tasks:**  
+- Conduct end-to-end benchmarking across all components (vLLM, RAG, caching, orchestration)  
+- Perform cross-cloud comparison (AWS, GCP, Azure, Intel Gaudi vs. NVIDIA GPUs)  
+- Optimize autoscaling and resource utilization policies (HPA, cluster autoscaler)  
+- Conduct cost-performance trade-off analysis under varying workloads  
+- Finalize best practices and recommendations for deployment  
+- Prepare demo scripts, visualization dashboards, and presentation slides  
+
+**Deliverables:**  
+- Complete benchmarking dataset with comparative analysis across clouds and accelerators  
+- Performance vs. cost analysis report (throughput, latency, TTFT, TPOT, cost per query)  
+- Optimized resource scaling configurations with documented results  
+- Best practices guide for deploying cloud-based inference stacks  
+- Final presentation package (slides + demo walkthrough + README documentation)  
+
+
+**Final Presentation (12/08)**  
+**Tasks:**  
+- Deliver final project presentation to stakeholders (class, mentors, evaluators)  
+- Demonstrate end-to-end inference stack (vLLM + RAG + Caching + Orchestration + Agentic workflows)  
+- Present benchmarking results with visualizations (latency, throughput, cost, scaling trends)  
+- Highlight cross-cloud comparison findings (AWS vs. GCP vs. Azure, NVIDIA vs. Gaudi accelerators)  
+- Share lessons learned, limitations, and future directions  
+
+**Deliverables:**  
+- Live demo of the complete inference and benchmarking framework  
+- Final presentation slides and report submitted  
+- Visualization dashboards showcasing benchmark results  
+- Documented best practices and recommendations for cloud-native AI inference deployment  
 
 ## General comments
 

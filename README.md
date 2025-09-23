@@ -33,37 +33,48 @@ This project is designed for technical professionals who deploy, optimize, and m
 ## 3. Scope and Features Of The Project:
 
 **In Scope**:
-- Core inference engine using vLLM with orchestration via llm-d
-- RAG system implementation with document processing, embedding generation, and vector search
-- Caching layer using Redis for embeddings, queries, and responses
-- Standardized benchmarking suite with performance measurement tools (Locust/JMeter, Prometheus)
-- Multi-cloud support for AWS, Azure, and Intel Gaudi accelerator testing
-- Performance metrics including throughput, latency, resource utilization, and cost efficiency analysis
+- **Support various LLM inference tasks** (e.g., text generation and question answering).
+- **Organize modern LLM workloads** (Agentic tasks, RAG workflows) and experiment with different configurations
+  -  Core inference engine built with vLLM
+  - Tweak inference parameters in prebuilt models to improve performance
+  - Execute in cloud native environments
+ - **Craft a benchmarking suite** that can measure the key performance of our system
+    - Report metrics (throughput, latency, cost-efficiency, resource utilization, etc.)
+    - Evaluate different components of the inference stack (orchestration layers, caching strategies, and GPU/accelerator utilization, etc.)
+- **Compare the performance of different inference stack configurations** and highlight best practices for scalability and deployment
 
-**Out of Scope**:
-- Custom model training or fine-tuning
-- Real-time production deployment beyond testing environments
-- Integration with proprietary cloud services not available for testing
-- Long-term production monitoring and maintenance
+
+**Out of scope**:
+- Configure and execute LLM-based inference stacks in non-cloud environments
+- Training and fine-tuning LLMs (existing models will be used instead) 
+- Long-term production deployment and monitoring
+
 
 ## 4. Solution Concept
 
 ### Global Architectural Structure Of the Project:
+This project mainly includes two parts: serving and benchmarking.
 
-![System Architecture Diagram](png/workflow.png)
+For serving, this project adopts Kubernetes to manage and organize computing and storage resources, where vLLM, as the core of high-performance LLM inference that empowers various upper-level applications, such as text generation and workflows, can be deployed on different nodes along with facilities for agentic workflow, like Cloud-native vector database. Additionally, common mechanisms like load balance, fault tolerance, and dynamic scaling can be supported if resources allow.
+As for the benchmarking, this project includes a benchmark suite that can test different metrics (e.g., Throughput, TTFT, and TPOT) under different scenarios with adjustable payloads.
+
+![System Architecture Diagram](png/workflow2.png)
 
 The architecture follows a phased approach with four distinct phases:
 
 **Phase 1: vLLM** - Basic vLLM setup for LLM inference
-**Phase 2: RAG System (+ Vector DB)** - Integration of Retrieval Augmented Generation system with Vector Database
-**Phase 3: Caching (+ Redis Cache)** - Incorporation of caching using Redis
-**Phase 4: Agentic (+ Orchestration)** - Addition of agentic capabilities and orchestration
 
-The system includes standardized benchmarking suite components (Load Generator, Workload Definition, Metrics Collector, Cost Analyzer), cloud infrastructure (Kubernetes, Storage, Model Registry), RAG components (Document Processor, Embedding Model, Vector Database, Retrieval Engine), and caching layer (Embedding Cache, Query Cache, Response Cache).
+**Phase 2: RAG System (+ Vector DB)** - Integration of Retrieval Augmented Generation system with Vector Database
+
+**Phase 3: Caching (+ Redis Cache)** - Incorporation of caching using Redis
+
+**Phase 4: Agentic (+ Orchestration + MCP Server + Heterogeneous Scheduling)** - Addition of agentic capabilities with MCP server and intelligent GPU/CPU task routing
+
+The system includes request processing layer (Load Balancer, API Gateway, Task Classifier, Heterogeneous Scheduler), core inference engine (vLLM Engine, Model Registry), RAG system (Document Processor, Embedding Model, Vector Database, Retrieval Engine), agentic system (MCP Server, Orchestrator, Agentic Workflows), caching layer (Embedding Cache, Query Cache, Response Cache), and infrastructure resources (GPU Nodes, CPU Nodes, Object Storage).
 
 ### Design Implications and Discussion:
 
-The phased approach allows for incremental complexity and performance measurement at each stage. The modular design enables independent testing of components while maintaining system integration. The standardized benchmarking suite ensures consistent and comparable results across different configurations and cloud platforms.
+To accommodate cloud computing, all components in the serving part can be distributed. With proper configurations, the system could have high availability and be robust to the single point of failure (SPOF). At the same time, it also allows the dynamic scaling just in case the computing resource runs out.
 
 ## 5. Acceptance criteria
 

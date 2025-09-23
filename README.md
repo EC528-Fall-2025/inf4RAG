@@ -15,7 +15,7 @@ Our vision is to design and optimize a scalable cloud-based inference stack that
 - Deployment on Cloud Infrastructure: Containerize and manage the inference stack within a Kubernetes cluster, enabling reproducible, scalable deployments.
 - Benchmarking and Best Practices: Develop a standardized benchmarking suite to compare configurations, analyze results, and compile findings into a final report.
 
-Stretch Goals: 
+**Stretch Goals**: 
 - Heterogeneous Scheduling: Explore strategies for efficiently distributing workloads across CPUs and accelerators, identifying where GPU offloading provides the most performance benefit.
 
 ## 2. Users/Personas Of The Project:

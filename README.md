@@ -109,11 +109,14 @@ To accommodate cloud computing, all components in the serving part can be distri
 - Develop a chatbot with retrieval augmented generation 
 
 **Deliverables:**
+- Code and dockerfile of deploy a chatbot that integrates RAG
+
+  
+**Sprint 2 (10/07)**  
 **Tasks:**  
 - Explore AWS options for inferencing and models
 - finalize NERC/Openstack setup
   
-**Sprint 2 (10/07)**  
 **Deliverables:**
 - Initial benchmarkings of throughput and latency of a basic model and a Mixture of Experts model
 

@@ -2,6 +2,7 @@ import os
 import copy
 import requests  # Make sure this is installed
 import click
+import math
 import subprocess
 import shutil
 from datetime import datetime
@@ -10,8 +11,7 @@ vllm_bench_serve_template = \
 """
 vllm bench serve \\
     --dataset-name random \\
-    --model {tokenizer_path} \\
-    --served-model-name {served_model_name} \\
+    --model {model} \\
     --num-prompts {num_prompts} \\
     --random-input-len {prefill_size} \\
     --random-output-len {max_sequence_length} \\
@@ -50,16 +50,14 @@ class BenchmarkConfig:
     def __init__(self,
                  num_prompts: int,
                  prefill_size: int,
-                 random_output_len: int, 
+                 max_sequence_length: int, 
                  host: str, port: int,
-                 tokenizer_path: str,
                  model_type: str):
         self.num_prompts = num_prompts
         self.prefill_size = prefill_size
-        self.max_sequence_length = random_output_len 
+        self.max_sequence_length = max_sequence_length 
         self.host = host
         self.port = port
-        self.tokenizer_path = tokenizer_path
         self.model_type = model_type
         
         self.result_dir = None 
@@ -68,7 +66,7 @@ class BenchmarkConfig:
         self.base_url = f"http://{self.host}:{self.port}/v1"
         
         # Fetch the model name from the server automatically
-        self.served_model_name = fetch_model_name(self.base_url)
+        self.model = fetch_model_name(self.base_url)  # NOTE: DO NOT SET "served-model-name" WHEN LAUNCHING SERVER
         
         self.additional_args = {}
 
@@ -81,8 +79,7 @@ class BenchmarkConfig:
             raise ValueError("result_dir is not set. This should be set before calling get_command.")
             
         basic_command = vllm_bench_serve_template.format(
-            tokenizer_path=self.tokenizer_path,
-            served_model_name=self.served_model_name,
+            model=self.model,
             num_prompts=self.num_prompts,
             prefill_size=self.prefill_size,
             max_sequence_length=self.max_sequence_length, # This name is used in the template
@@ -120,7 +117,7 @@ def run_and_archive(config: BenchmarkConfig, test_type: str, **kwargs):
     # 1. Generate a unique result directory name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     # Clean up model name for use in filename
-    safe_model_name = config.served_model_name.replace('/','_')
+    safe_model_name = config.model.replace('/','_')
     result_dir = f"bench_{safe_model_name}_{test_type}_{timestamp}"
     config.result_dir = result_dir
     
@@ -164,24 +161,33 @@ def run_and_archive(config: BenchmarkConfig, test_type: str, **kwargs):
 
 @click.group()
 @click.option("--num-prompts", type=int, default=1024, help="Number of prompts to generate")
-@click.option("--prefill-size", type=int, default=32, help="Size of prefill in tokens (vLLM arg: --random-input-len)")
-@click.option("--random-output-len", type=int, default=512, help="Max tokens to generate (vLLM arg: --random-output-len)") 
+@click.option("--prefill-size", type=int, default=32, help="Size of prefill in tokens")
+@click.option("--max-sequence-length", type=int, default=512, help="Max tokens to generate") 
 @click.option("--host", type=str, default="127.0.0.1", help="Host IP of the model server")
 @click.option("--port", type=int, default=8000, help="Port of the model server")
-@click.option("--tokenizer-path", type=str, required=True, help="Local path to the model for tokenizer loading (e.g., /mnt/models/llama-30b)")
 @click.option("--model-type", type=click.Choice(['chat', 'completion']), default='chat', help="Use 'chat' for Instruct models, 'completion' for Base models.")
 @click.pass_context
-def bench(ctx, num_prompts, prefill_size, random_output_len, host, port, tokenizer_path, model_type): # <-- CHANGED
+def bench(ctx, num_prompts, prefill_size, max_sequence_length, host, port, model_type): # <-- CHANGED
     ctx.obj = BenchmarkConfig(
-        num_prompts, prefill_size, random_output_len,  # <-- CHANGED
-        host, port, tokenizer_path, model_type
+        num_prompts,
+        prefill_size,
+        max_sequence_length,
+        host,
+        port,
+        model_type
     )
 
 @bench.command("steady")
-@click.option("--request-rate", type=float, default=16.0, help="Requests per second (vLLM arg: --request-rate)")
+@click.option("--duration", type=int, default=90, help="Duration of the steady benchmark in seconds")
+@click.option("--request-rate", type=float, default=16.0, help="Requests per second")
 @click.pass_obj
 def steady_testing(config: BenchmarkConfig, **kwargs):
     inner_config = copy.deepcopy(config)
+
+    # Overwrite the number of prompts
+    duration = kwargs.pop("duration")
+    inner_config.num_prompts = math.ceil(duration * kwargs["request_rate"])
+
     run_and_archive(inner_config, "steady", **kwargs)
 
 @bench.command("flood")
@@ -193,17 +199,10 @@ def flood_testing(config: BenchmarkConfig, **kwargs):
 if __name__=="__main__":
     bench()
 
-
-
-# How to run this script:
-# Example for Llama-30B (a 'completion' model)
-
 # python bench.py \
-#   --tokenizer-path /mnt/models/Qwen3-30B-A3B-Instruct-2507 \
 #   --model-type chat \
 #   flood
 
 # python bench.py \
-#   --tokenizer-path /mnt/models/Qwen3-30B-A3B-Instruct-2507 \
 #   --model-type chat \
-#   steady --request-rate 10.0
+#   steady --request-rate 32 --duration 120

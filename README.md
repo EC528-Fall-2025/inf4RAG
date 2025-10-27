@@ -121,13 +121,15 @@ To accommodate cloud computing, all components in the serving part can be distri
 - Initial benchmarkings of throughput and latency of a basic model and a Mixture of Experts model
 
 **Sprint 3 (10/29)**
-- Deploy Redis caching infrastructure
-- Implement all three cache types (embedding, query, response)
-- Optimize cache configurations
-- Measure cache performance impact
+- Deploy LLMs for parallel/distributed inference
+- Implement Retriveal-Augmented Generation pipeline
+- Develop a unified benchmark tool
+- Refactor Chatbot
 
 **Deliverables:**
-- Finalized vLLM backend setup,  
+- Finalized vLLM backend setup
+- A out-of-box LLM benchmark script
+- A chat bot that supports RAG
 
 **Sprint 4 (11/05)**
 - Add orchestration layer for complex workflows

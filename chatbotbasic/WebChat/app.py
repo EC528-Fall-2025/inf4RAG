@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import re
 import datetime
 import gradio as gr
 import yaml
+import requests
+import os
 
 from models import OpenAIModel
 from tools import Tools
@@ -24,6 +28,9 @@ examples = config["examples"]
 temperature = config["temperature"]
 max_actions = config["max_actions"]
 
+# RAG Configuration
+RAG_SERVICE_URL = "http://localhost:8001"
+
 llm_tools = Tools()
 
 def create_system_message():
@@ -40,14 +47,78 @@ def create_system_message():
 
     return message
 
-def generate(new_user_message, history):
-    prompt = new_user_message
+def check_rag_service():
+    """Check if RAG service is available"""
+    try:
+        response = requests.get(f"{RAG_SERVICE_URL}/rag/health", timeout=2)
+        return response.status_code == 200
+    except:
+        return False
 
-    # full_response is displayed to the user in the ChatInterface and is the
-    # same as the prompt, except it omits the Question and Result to improve
-    # readability.
+def upload_file_to_rag(file, dataset_id):
+    """Upload file to RAG service"""
+    if file is None:
+        return "No file selected"
+    
+    try:
+        # Read the file
+        with open(file.name, 'rb') as f:
+            files = {'file': f}
+            data = {'dataset_id': dataset_id}
+            
+            response = requests.post(
+                f"{RAG_SERVICE_URL}/rag/upload",
+                files=files,
+                data=data,
+                timeout=120
+            )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return f"✓ Upload successful! Processed {result.get('file_count', 0)} files to dataset '{dataset_id}'"
+        else:
+            return f"✗ Upload failed: {response.text}"
+            
+    except requests.exceptions.ConnectionError:
+        return f"✗ Error: Cannot connect to RAG service at {RAG_SERVICE_URL}. Please ensure RAG service is running."
+    except Exception as e:
+        return f"✗ Error: {str(e)}"
+
+def generate(new_user_message, history, use_rag=False):
+    # Only use RAG if enabled
+    if use_rag:
+        try:
+            response = requests.post(
+                f"{RAG_SERVICE_URL}/rag/query",
+                json={
+                    "query": new_user_message,
+                    "dataset_id": "default-dataset",
+                    "top_k": 4
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") == "success":
+                    # Use RAG-generated prompt
+                    prompt = result["prompt"]
+                    if verbose:
+                        print(f"[RAG] Using retrieved context with {result['retrieved_count']} documents")
+                else:
+                    prompt = new_user_message
+            else:
+                prompt = new_user_message
+        except Exception as e:
+            if verbose:
+                print(f"[RAG] Error: {e}")
+            prompt = new_user_message
+    else:
+        # Normal mode - use original query
+        prompt = new_user_message
+
+    # Collect full response from stream
     full_response = ""
-
     iters = 0
     model = MODELS["vLLM"]
 
@@ -66,19 +137,48 @@ def generate(new_user_message, history):
                 temperature=temperature
             )
 
+            # Collect all chunks into full_response
             for chunk in stream:
                 completion = model.parse_completion(chunk)
-
                 if completion:
-                    # Stream each completion to the ChatInterface
                     full_response += completion
-                    yield full_response
             
-            return
+            # Exit the while loop after processing the stream
+            break
     
     except Exception as e:
         full_response += f"\n<span style='color:red'>Error: {e}</span>"
-        yield full_response
+    
+    # Return the final response string instead of a generator
+    return full_response
+
+
+def on_rag_mode_toggle(button_state):
+    """Handle RAG mode toggle button click"""
+    global current_rag_mode
+    
+    if current_rag_mode:
+        # Currently in RAG mode, switch to normal mode
+        current_rag_mode = False
+        return (
+            gr.Button(value="Enable RAG Mode", variant="secondary"),
+            gr.File(visible=False),
+            gr.Textbox(visible=True, value="Normal conversation mode. Click to enable RAG mode.")
+        )
+    else:
+        # Currently in normal mode, check service and switch to RAG mode
+        if not check_rag_service():
+            return (
+                gr.Button(value="Enable RAG Mode", variant="secondary"),
+                gr.File(visible=False),
+                gr.Textbox(visible=True, value="⚠️ RAG service is not available. Please start the RAG service at http://localhost:8001")
+            )
+        current_rag_mode = True
+        return (
+            gr.Button(value="Disable RAG Mode", variant="primary"),
+            gr.File(visible=True),
+            gr.Textbox(visible=True, value="RAG mode enabled. You can upload documents.")
+        )
 
 
 # Create Gradio app
@@ -96,11 +196,63 @@ h3 { text-align: center; }
 .gradio-container { height: 100vh !important; }
 #component-0 { flex-grow: 1; overflow: auto; }
 #chatbot { flex-grow: 1; overflow: auto; }
+body { 
+    min-height: 100vh; 
+}
 """
+
+# Global state for RAG mode
+current_rag_mode = False
 
 with gr.Blocks(css=CSS) as app:
     gr.Markdown(description)
-    chatinterface = gr.ChatInterface(fn=generate, examples=examples)
+    
+    # RAG mode toggle
+    with gr.Row():
+        use_rag_button = gr.Button(
+            value="Enable RAG Mode",
+            variant="secondary"
+        )
+    
+    # Upload section - initially hidden
+    file_upload = gr.File(
+        label="Upload RAG Documents (.zip)",
+        file_count="single",
+        file_types=[".zip"],
+        visible=False
+    )
+    
+    upload_status = gr.Textbox(
+        label="Status",
+        value="Normal conversation mode. Click 'Enable RAG Mode' to upload documents.",
+        interactive=False,
+        visible=False
+    )
+    
+    # RAG mode toggle handler
+    use_rag_button.click(
+        fn=on_rag_mode_toggle,
+        inputs=None,
+        outputs=[use_rag_button, file_upload, upload_status],
+        show_progress=False
+    )
+    
+    # File upload handler
+    file_upload.change(
+        fn=lambda file: upload_file_to_rag(file, "default-dataset"),
+        inputs=file_upload,
+        outputs=upload_status
+    )
+    
+    # Chat interface
+    def chat_handler(message, history):
+        global current_rag_mode
+        return generate(message, history, use_rag=current_rag_mode)
+    
+    chatinterface = gr.ChatInterface(
+        fn=chat_handler,
+        examples=examples
+    )
     chatinterface.chatbot.elem_id = "chatbot"
 
     with gr.Accordion(label="Options", open=False):

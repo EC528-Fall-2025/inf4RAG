@@ -110,13 +110,26 @@ To accommodate cloud computing, all components in the serving part can be distri
 
 **Deliverables:**
 - Code and dockerfile of deploy a chatbot that integrates RAG
+
   
+**Sprint 2 (10/07)**  
+**Tasks:**  
+- Explore AWS options for inferencing and models
+- finalize NERC/Openstack setup
+  
+**Deliverables:**
+- Initial benchmarkings of throughput and latency of a basic model and a Mixture of Experts model
 
 **Sprint 3 (10/29)**
-- Deploy Redis caching infrastructure
-- Implement all three cache types (embedding, query, response)
-- Optimize cache configurations
-- Measure cache performance impact
+- Deploy LLMs for parallel/distributed inference
+- Implement Retriveal-Augmented Generation pipeline
+- Develop a unified benchmark tool
+- Refactor Chatbot
+
+**Deliverables:**
+- Finalized vLLM backend setup
+- A out-of-box LLM benchmark script
+- A chat bot that supports RAG
 
 **Sprint 4 (11/05)**
 - Add orchestration layer for complex workflows

@@ -1,27 +1,22 @@
-verbose: False
+verbose: True
 
-description: "### This is a chatbot that can access Google Search and webpages to answer questions 
-[[How it works](https://medium.com/@thait/webchat-building-a-chatbot-with-access-to-a-web-browser-238602ee751f)] [[Code](https://github.com/thaitran/WebChat)]"
+description: "### This is a chatbot interface powered by vLLM"
 
 examples:
-- Which bank offers the best savings rate?
+- How are you?
 - Is it possible to build a room temperature superconductor?
 - Should I go to the beach in Santa Cruz tomorrow?
 - Explain the conflict between Zuck and Elon
 - Summarize today's nytimes.com headlines
 
 enabled_models:
-- GPT-3.5
-- GPT-4
-- Claude 2
-- Llama 2
+- vLLM
 
 enabled_browsers:
-- Headless
 - Chrome
-- Firefox
-- Safari
-- Edge
+
+openstack_ip_port: "199.94.61.26:8000"
+api_key: "ec528"
 
 temperature: 0.1
 

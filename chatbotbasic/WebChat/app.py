@@ -1,113 +1,133 @@
-# app.py
+from __future__ import annotations
+
 import re
 import datetime
 import gradio as gr
 import yaml
+import requests
+import os
 
-from models import OpenAIModel, AnthropicModel, HuggingFaceLlama2Model
+from models import OpenAIModel
 from tools import Tools
-from rag import rag_answer, rag_answer_multi 
 
 SYSTEM_MESSAGE_TEMPLATE = "prompt.txt"
-
-# Quick-pick repos
-KNOWN_REPOS = [
-    "https://github.com/EC528-Fall-2025/inf4RAG",
-    "https://github.com/EC528-Fall-2025/Kagenti-AIWorkloads",
-    "https://github.com/EC528-Fall-2025/Viz-TrinoFed",
-    "https://github.com/EC528-Fall-2025/FedMed-ChRIS",
-    "https://github.com/EC528-Fall-2025/PolicySynth-OPA",
-    "https://github.com/EC528-Fall-2025/DB-LogAnalyzer",
-    "https://github.com/EC528-Fall-2025/AutoSec-Certs",
-    "https://github.com/EC528-Fall-2025/XFault-ITBench",
-    "https://github.com/EC528-Fall-2025/CNFS-Interposer",
-    "https://github.com/EC528-Fall-2025/CloudNeuro-Tekton"
-]
-ALL_SENTINEL = "__ALL__"  
-
-MODELS = {
-    "GPT-3.5": OpenAIModel("gpt-3.5-turbo-16k", 16384),
-    "GPT-4": OpenAIModel("gpt-4", 8192),
-    "Claude 2": AnthropicModel("claude-2", 100000),
-    "Llama 2": HuggingFaceLlama2Model("meta-llama/Llama-2-70b-chat-hf", 4096),
-}
 
 with open("config.yaml", "r") as config_file:
     config = yaml.safe_load(config_file)
 
+# synthesize the base_url
+config["base_url"] = f"http://{config.get('openstack_ip_port', '127.0.0.1:8000')}/v1"
+
+MODELS = {
+    "vLLM": OpenAIModel(config)
+}
+
 verbose = config["verbose"]
 description = config["description"]
 examples = config["examples"]
-enabled_models = config["enabled_models"]
-selected_model = enabled_models[0]
-enabled_browsers = config["enabled_browsers"]
-selected_browser = enabled_browsers[0]
 temperature = config["temperature"]
 max_actions = config["max_actions"]
 
-llm_tools = Tools(browser=selected_browser)
+# RAG Configuration
+RAG_SERVICE_URL = "http://localhost:8001"
+
+llm_tools = Tools()
 
 def create_system_message():
+    """
+    Return system message, including today's date and the available tools.
+    """
     with open(SYSTEM_MESSAGE_TEMPLATE) as f:
         message = f.read()
+
     now = datetime.datetime.now()
     current_date = now.strftime("%B %d, %Y")
+
     message = message.replace("{{CURRENT_DATE}}", current_date)
-    message = message.replace("{{TOOLS_PROMPT}}", llm_tools.get_tool_list_for_prompt())
+
     return message
 
-def _resolve_repo(chosen_repo: str | None, typed_repo: str | None) -> str:
-    """
-    Returns one of:
-      - "" (no RAG)
-      - ALL_SENTINEL (search all known repos)
-      - a specific repo URL (string)
-    """
-    chosen_repo = (chosen_repo or "").strip()
-    typed_repo = (typed_repo or "").strip()
-    if chosen_repo == "All known repos":
-        return ALL_SENTINEL
-    return chosen_repo if chosen_repo else typed_repo
+def check_rag_service():
+    """Check if RAG service is available"""
+    try:
+        response = requests.get(f"{RAG_SERVICE_URL}/rag/health", timeout=2)
+        return response.status_code == 200
+    except:
+        return False
 
-def generate(new_user_message, history, chosen_repo=None, typed_repo=None):
-    """
-    If a GitHub repo is selected/typed, answer via RAG first.
-    If 'All known repos' is selected, search across all KNOWN_REPOS.
-    Otherwise, run the normal tool-using loop.
-    """
-    ACTION_REGEX = r'(\n|^)Action: (.*)\[(.*)\]'
-    CONCLUSION_REGEX = r'(\n|^)Conclusion: .*'
+def upload_file_to_rag(file, dataset_id):
+    """Upload file to RAG service"""
+    if file is None:
+        return "No file selected"
+    
+    try:
+        # Read the file
+        with open(file.name, 'rb') as f:
+            files = {'file': f}
+            data = {'dataset_id': dataset_id}
+            
+            response = requests.post(
+                f"{RAG_SERVICE_URL}/rag/upload",
+                files=files,
+                data=data,
+                timeout=120
+            )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return f"✓ Upload successful! Processed {result.get('file_count', 0)} files to dataset '{dataset_id}'"
+        else:
+            return f"✗ Upload failed: {response.text}"
+            
+    except requests.exceptions.ConnectionError:
+        return f"✗ Error: Cannot connect to RAG service at {RAG_SERVICE_URL}. Please ensure RAG service is running."
+    except Exception as e:
+        return f"✗ Error: {str(e)}"
 
-    repo_resolved = _resolve_repo(chosen_repo, typed_repo)
-
-    # 0) RAG path(s)
-    if repo_resolved:
+def generate(new_user_message, history, use_rag=False):
+    # Only use RAG if enabled
+    if use_rag:
         try:
-            if repo_resolved == ALL_SENTINEL:
-                rag_resp = rag_answer_multi(KNOWN_REPOS, str(new_user_message), chat_history=history or [])
+            response = requests.post(
+                f"{RAG_SERVICE_URL}/rag/query",
+                json={
+                    "query": new_user_message,
+                    "dataset_id": "default-dataset",
+                    "top_k": 4
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("status") == "success":
+                    # Use RAG-generated prompt
+                    prompt = result["prompt"]
+                    if verbose:
+                        print(f"[RAG] Using retrieved context with {result['retrieved_count']} documents")
+                else:
+                    prompt = new_user_message
             else:
-                rag_resp = rag_answer(repo_resolved, str(new_user_message), chat_history=history or [])
-
-            if rag_resp and rag_resp.strip():
-                yield rag_resp
-                return
-            else:
-                yield "RAG returned no content; falling back to normal reasoning…"
+                prompt = new_user_message
         except Exception as e:
-            yield f"RAG error: {e}\nFalling back to normal reasoning…"
+            if verbose:
+                print(f"[RAG] Error: {e}")
+            prompt = new_user_message
+    else:
+        # Normal mode - use original query
+        prompt = new_user_message
 
-    # 1) Normal agent/tool loop
-    prompt = f"Question: {new_user_message}\n\n"
+    # Collect full response from stream
     full_response = ""
-    iteration = 1
-
-    model = MODELS[selected_model]
-    system_message_token_count = model.count_tokens(system_message)
+    iters = 0
+    model = MODELS["vLLM"]
 
     try:
         while True:
             if verbose:
-                print("======\nPROMPT\n======")
+                print("="*80)
+                print(f"ITERATION {iters}")
+                print("="*80)
                 print(prompt)
 
             stream = model.generate(
@@ -117,75 +137,56 @@ def generate(new_user_message, history, chosen_repo=None, typed_repo=None):
                 temperature=temperature
             )
 
-            partial_response = ""
-
+            # Collect all chunks into full_response
             for chunk in stream:
                 completion = model.parse_completion(chunk)
                 if completion:
                     full_response += completion
-                    partial_response += completion
-                    yield full_response
-
-                    matches = re.search(ACTION_REGEX, partial_response)
-                    if matches:
-                        tool = matches.group(2).strip()
-                        params = matches.group(3).strip()
-
-                        result = llm_tools.run_tool(tool, params)
-
-                        prompt = f"Question: {new_user_message}\n\n"
-                        prompt += f"{full_response}\n\n"
-
-                        # token budgeting
-                        history_token_count = 0
-                        for user_message, assistant_response in history:
-                            if user_message:
-                                history_token_count += model.count_tokens(user_message)
-                            if assistant_response:
-                                history_token_count += model.count_tokens(assistant_response)
-
-                        prompt_token_count = model.count_tokens(prompt)
-                        result_token_count = model.count_tokens(result)
-                        available_tokens = int(
-                            0.9 * (model.context_size - system_message_token_count - history_token_count - prompt_token_count)
-                        )
-
-                        if result_token_count > available_tokens and available_tokens > 0:
-                            ratio = available_tokens / result_token_count
-                            truncate_result_len = int(len(result) * ratio)
-                            result = result[:max(truncate_result_len, 0)]
-                            full_response += (
-                                f"\n\n<span style='color:gray'>*Note: Only {ratio*100:.0f}% of the "
-                                f"tool result was shown to the model due to context limits.*</span>\n\n"
-                            )
-                            yield full_response
-
-                        prompt += f"Result: {result}\n\n"
-                        break
-
-            if re.search(CONCLUSION_REGEX, partial_response) or not re.search(ACTION_REGEX, partial_response):
-                return
-
-            if not partial_response.endswith("\n"):
-                full_response += "\n\n"
-                yield full_response
-
-            if iteration >= max_actions:
-                full_response += f"<span style='color:red'>*Stopping after running {max_actions} actions.*</span>"
-                yield full_response
-                return
-            else:
-                iteration += 1
-
+            
+            # Exit the while loop after processing the stream
+            break
+    
     except Exception as e:
         full_response += f"\n<span style='color:red'>Error: {e}</span>"
-        yield full_response
+    
+    # Return the final response string instead of a generator
+    return full_response
+
+
+def on_rag_mode_toggle(button_state):
+    """Handle RAG mode toggle button click"""
+    global current_rag_mode
+    
+    if current_rag_mode:
+        # Currently in RAG mode, switch to normal mode
+        current_rag_mode = False
+        return (
+            gr.Button(value="Enable RAG Mode", variant="secondary"),
+            gr.File(visible=False),
+            gr.Textbox(visible=True, value="Normal conversation mode. Click to enable RAG mode.")
+        )
+    else:
+        # Currently in normal mode, check service and switch to RAG mode
+        if not check_rag_service():
+            return (
+                gr.Button(value="Enable RAG Mode", variant="secondary"),
+                gr.File(visible=False),
+                gr.Textbox(visible=True, value="⚠️ RAG service is not available. Please start the RAG service at http://localhost:8001")
+            )
+        current_rag_mode = True
+        return (
+            gr.Button(value="Disable RAG Mode", variant="primary"),
+            gr.File(visible=True),
+            gr.Textbox(visible=True, value="RAG mode enabled. You can upload documents.")
+        )
 
 
 # Create Gradio app
 system_message = create_system_message()
 if verbose:
-    print("==============\nSYSTEM MESSAGE\n==============")
+    print("="*80)
+    print("SYSTEM PROMPT:")
+    print("="*80)
     print(system_message)
 
 CSS = """
@@ -195,89 +196,86 @@ h3 { text-align: center; }
 .gradio-container { height: 100vh !important; }
 #component-0 { flex-grow: 1; overflow: auto; }
 #chatbot { flex-grow: 1; overflow: auto; }
+body { 
+    min-height: 100vh; 
+}
 """
 
-multiple_models_enabled = len(enabled_models) > 1
-multiple_browsers_enabled = len(enabled_browsers) > 1
+# Global state for RAG mode
+current_rag_mode = False
 
 with gr.Blocks(css=CSS) as app:
     gr.Markdown(description)
-
-    # Pass BOTH inputs directly to generate()
+    
+    # RAG mode toggle
     with gr.Row():
-        known_repo_dd = gr.Dropdown(
-            label="Known GitHub repos",
-            choices=["", "All known repos"] + KNOWN_REPOS,
-            value="",
+        use_rag_button = gr.Button(
+            value="Enable RAG Mode",
+            variant="secondary"
         )
-        repo_url_box = gr.Textbox(
-            label="(Optional) GitHub repo URL for RAG (overrides blank dropdown)",
-            placeholder="https://github.com/owner/repo"
-        )
-
-    # Normalize examples for ChatInterface with additional_inputs=[known_repo_dd, repo_url_box]
-    def _norm_examples(examples_list, default_repo=""):
-        if not examples_list:
-            return None
-        if not isinstance(examples_list[0], list):
-            # make each example: [prompt, known_repo, typed_repo]
-            return [[ex, default_repo, ""] for ex in examples_list]
-        norm = []
-        for row in examples_list:
-            # row could be [prompt] or [prompt, repo]
-            if len(row) == 1:
-                norm.append([row[0], default_repo, ""])
-            elif len(row) >= 2:
-                # treat row[1] as known_repo, keep typed empty
-                norm.append([row[0], row[1], ""])
-        return norm
-
-    normalized_examples = _norm_examples(examples, default_repo="")  # leave blank by default
-
-    chatinterface = gr.ChatInterface(
-        fn=generate,                       # generate(msg, history, known_repo_choice, typed_repo_url)
-        additional_inputs=[known_repo_dd, repo_url_box],
-        examples=normalized_examples
+    
+    # Upload section - initially hidden
+    file_upload = gr.File(
+        label="Upload RAG Documents (.zip)",
+        file_count="single",
+        file_types=[".zip"],
+        visible=False
     )
+    
+    upload_status = gr.Textbox(
+        label="Status",
+        value="Normal conversation mode. Click 'Enable RAG Mode' to upload documents.",
+        interactive=False,
+        visible=False
+    )
+    
+    # RAG mode toggle handler
+    use_rag_button.click(
+        fn=on_rag_mode_toggle,
+        inputs=None,
+        outputs=[use_rag_button, file_upload, upload_status],
+        show_progress=False
+    )
+    
+    # File upload handler
+    file_upload.change(
+        fn=lambda file: upload_file_to_rag(file, "default-dataset"),
+        inputs=file_upload,
+        outputs=upload_status
+    )
+    
+    # Chat interface
+    def chat_handler(message, history):
+        global current_rag_mode
+        return generate(message, history, use_rag=current_rag_mode)
+    
+    chatinterface = gr.ChatInterface(
+        fn=chat_handler,
+        examples=examples
+    )
+    chatinterface.chatbot.elem_id = "chatbot"
 
-    try:
-        chatinterface.chatbot.elem_id = "chatbot"
-    except Exception:
-        pass
-
-    with gr.Accordion(label="Options", open=multiple_models_enabled):
+    with gr.Accordion(label="Options", open=False):
         with gr.Row():
-            model_selector = gr.Radio(
-                label="Model",
-                choices=enabled_models,
-                value=selected_model,
-                visible=multiple_models_enabled
-            )
-            browser_selector = gr.Radio(
-                label="Web Browser",
-                choices=enabled_browsers,
-                value=selected_browser,
-                visible=multiple_browsers_enabled
-            )
-            temperature_slider = gr.Slider(
-                label="Temperature", minimum=0.1, maximum=1, step=0.1, value=temperature
+            model_name_box = gr.Textbox(
+                label="Model Name",
+                placeholder="N/A",
+                value=MODELS["vLLM"].model_name
             )
 
-    def change_model(new_model):
-        global selected_model
-        selected_model = new_model
+            base_url_box = gr.Textbox(
+                label="Request URL",
+                placeholder="https://api.openai.com/v1",
+                value=f"{config.get('base_url', 'https://api.openai.com/v1')}/api_key={config.get('api_key', '')}"
+            )
 
-    def change_browser(new_browser):
-        global selected_browser, llm_tools
-        selected_browser = new_browser
-        llm_tools.set_browser(selected_browser)
+            temperature_slider = gr.Slider(label="Temperature", minimum=0, maximum=1, step=0.1, value=temperature)
+        
 
     def change_temperature(new_temperature):
         global temperature
         temperature = new_temperature
 
-    model_selector.change(fn=change_model, inputs=model_selector)
-    browser_selector.change(fn=change_browser, inputs=browser_selector)
     temperature_slider.change(fn=change_temperature, inputs=temperature_slider)
 
 app.queue().launch(debug=True, share=False)

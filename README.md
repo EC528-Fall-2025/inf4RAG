@@ -110,13 +110,26 @@ To accommodate cloud computing, all components in the serving part can be distri
 
 **Deliverables:**
 - Code and dockerfile of deploy a chatbot that integrates RAG
+
   
+**Sprint 2 (10/07)**  
+**Tasks:**  
+- Explore AWS options for inferencing and models
+- finalize NERC/Openstack setup
+  
+**Deliverables:**
+- Initial benchmarkings of throughput and latency of a basic model and a Mixture of Experts model
 
 **Sprint 3 (10/29)**
-- Deploy Redis caching infrastructure
-- Implement all three cache types (embedding, query, response)
-- Optimize cache configurations
-- Measure cache performance impact
+- Deploy LLMs for parallel/distributed inference
+- Implement Retriveal-Augmented Generation pipeline
+- Develop a unified benchmark tool
+- Refactor Chatbot
+
+**Deliverables:**
+- Finalized vLLM backend setup
+- A out-of-box LLM benchmark script
+- A chat bot that supports RAG
 
 **Sprint 4 (11/05)**
 - Add orchestration layer for complex workflows
@@ -132,6 +145,27 @@ To accommodate cloud computing, all components in the serving part can be distri
 - Present project results and findings
 - Demonstrate benchmarking framework
 - Share best practices and recommendations
+  
+## How to run basic chat bot with vLLM backend
+- Launch instance on openstack
+    - Make sure "vLLM serve" is a security group
+    - Assign a floating IP
+- Attach volume "All-Models" to instance, with path /dev/vdb
+- SSH using the IP to connect to the instance
+- Mount the volume using
+  `sudo mount -t ext4 /dev/vdb /data`
+- Run vLLM backend with `conda activate vllm`
+- Run `vllm serve /data/Phi-3-mini-4k-instruct --api-key=(API KEY GOES HERE)`
+   - using Phi-3-mini since it is lightweight for demo purposes
+- Modify configuration file (./config.yaml) on local machine and replace IP address
+- Launch chatbot on local machine with `python ./app.py`
+- Observe benchmarking metrics and others in the vLLM backend
+  
+**AFTER DONE USING**
+- Unmount and detach volume
+- Shut off and delete instance
+- Make sure to discard floating IPs
+
 
 ## General comments
 

@@ -10,13 +10,12 @@ class Tools:
     """
     Tools that can be used by an LLM
     """
-    SUPPORTED_BROWSERS = ["Chrome", "Firefox", "Safari", "Edge", "Headless"]
 
-    def __init__(self, browser=None):
+    def __init__(self):
         self.tools = { }
         self.webdriver = None
 
-        self.set_browser(browser)
+        self.set_browser("Chrome")
 
         self.add_tool(
             self.calculate,
@@ -80,12 +79,6 @@ class Tools:
         return result
 
     def set_browser(self, browser):
-        """
-        Set the browser that should be used for fetching web pages
-        """
-        if not(browser is None or browser in self.SUPPORTED_BROWSERS):
-            raise Exception(f"The only supported browsers are: {self.SUPPORTED_BROWSERS}")
-
         self.browser = browser
 
         # Close the previous browser
@@ -98,26 +91,13 @@ class Tools:
         self.webdriver = None
 
     def create_webdriver(self):
-        """
-        Helper function that creates and returns a Selenium webdriver for the
-        selected browser.
-        """
-        if self.browser == "Chrome":
-            return webdriver.Chrome()
-        elif self.browser == "Firefox":
-            return webdriver.Firefox()
-        elif self.browser == "Safari":
-            return webdriver.Safari()
-        elif self.browser == "Edge":
-            return webdriver.Edge()
-        else:
-            return None
+        return webdriver.Chrome()
 
     def get_url(self, url):
         """
         Return contents of the URL.  Uses Selenium if browser is not Headless.
         """
-        if self.browser is None or self.browser == "Headless":
+        if self.browser is None:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
             }

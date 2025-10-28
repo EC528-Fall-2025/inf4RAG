@@ -20,7 +20,7 @@ class RAGConfig:
     min_chunk_chars: int = 50      # Minimum valid chunk length; shorter chunks are discarded
 
     # Retrieval configuration
-    default_top_k: int = 4         # Default number of results to retrieve
+    default_top_k: int = 3         # Default number of results to retrieve
 
     # Preprocessing options
     lowercase: bool = True         # Convert text to lowercase

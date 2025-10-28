@@ -5,11 +5,11 @@ from flask import Flask, request, jsonify
 from pathlib import Path
 import tempfile
 
-from .config import RAGConfig
-from .pipeline import RAGPipeline
-from .services.upload_service import UploadService
-from .services.query_service import QueryService
-from .utils.validators import validate_upload_request, MAX_UPLOAD_SIZE
+from my_rag.config import RAGConfig
+from my_rag.pipeline import RAGPipeline
+from my_rag.services.upload_service import UploadService
+from my_rag.services.query_service import QueryService
+from my_rag.utils.validators import validate_upload_request, MAX_UPLOAD_SIZE
 
 
 # Initialize services

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-deployment
+  namespace: vllm-inference
+  labels:
+    app: rag
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag
+  template:
+    metadata:
+      labels:
+        app: rag
+    spec:
+      serviceAccountName: vllm-service-account
+      containers:
+      - name: rag
+        image: ghcr.io/ec528-fall-2025/inf4rag-rag:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PORT
+          value: "8001"
+        - name: RAG_PERSIST_DIR
+          value: "/data"
+        ports:
+        - containerPort: 8001
+          name: http
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+        livenessProbe:
+          httpGet:
+            path: /rag/health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /rag/health
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: rag-data
+          mountPath: /data
+      volumes:
+      - name: rag-data
+        emptyDir:
+          sizeLimit: 5Gi

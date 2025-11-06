@@ -1,0 +1,25 @@
+# Ignore VCS and build cache
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Benchmarks, large data, notebooks
+bench-results/
+benchmark-suite/
+*.ipynb
+png/
+
+# Local datasets (mount externally instead)
+persistent_data/datasets/*/raw/*
+
+# Python virtual environments
+venv/
+.env
+
+# OS / editor files
+.DS_Store
+.idea/
+.vscode/

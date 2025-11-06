@@ -6,7 +6,9 @@ resources:
 - service-account.yaml
 - vllm-deployment.yaml
 - vllm-gemma-deployment.yaml
+- rag-deployment.yaml
+- rag-service.yaml
 
 commonLabels:
   project: inf4rag
-  component: vllm
+  component: core

@@ -1,9 +1,16 @@
-"""Flask application with minimal route handlers."""
+"""Flask application with minimal route handlers.
+
+Containerization notes:
+- Listens on PORT (default 8001)
+- Health endpoint: GET /rag/health
+- Persistent data directory can be overridden with env var RAG_PERSIST_DIR
+"""
 
 from __future__ import annotations
 from flask import Flask, request, jsonify
 from pathlib import Path
 import tempfile
+import os
 
 from my_rag.config import RAGConfig
 from my_rag.pipeline import RAGPipeline
@@ -13,13 +20,20 @@ from my_rag.utils.validators import validate_upload_request, MAX_UPLOAD_SIZE
 
 
 # Initialize services
-cfg = RAGConfig()
+# Allow overriding persistent_dir via env var for container volume mounts
+persist_dir = os.getenv("RAG_PERSIST_DIR")
+if persist_dir:
+    cfg = RAGConfig(persistent_dir=Path(persist_dir))
+else:
+    cfg = RAGConfig()
 pipeline = RAGPipeline(cfg)
 upload_service = UploadService(cfg, pipeline)
 query_service = QueryService(cfg, pipeline)
 
 # Create Flask app
 app = Flask(__name__)
+# Enforce upload size limit consistent with validator
+app.config['MAX_CONTENT_LENGTH'] = MAX_UPLOAD_SIZE
 
 
 @app.route("/rag/upload", methods=["POST"])
@@ -147,4 +161,6 @@ if __name__ == "__main__":
     print("=" * 60)
     print()
     
-    app.run(host="0.0.0.0", port=8001, debug=True)
+    port = int(os.getenv("PORT", "8001"))
+    debug = os.getenv("RAG_DEBUG", "0") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug)

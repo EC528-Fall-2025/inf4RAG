@@ -31,6 +31,23 @@ class RAGConfig:
     index_file: str = "index.npz"
     meta_file: str = "meta.json"
 
+    # Vector backend configuration
+    backend: str = "tfidf"   # "tfidf", "faiss", or "qdrant"
+
+    # Embedding provider: "local" (sentence-transformers) or "openai"
+    embedding_provider: str = "local"
+    # Model name: for local provider, e.g., "sentence-transformers/all-MiniLM-L6-v2"
+    # for openai provider, e.g., "text-embedding-3-small"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+
+    # FAISS filenames
+    faiss_index_file: str = "faiss.index"
+
+    # Qdrant settings
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
+    qdrant_collection_prefix: str = "rag"
+
     def dataset_dir(self, dataset_id: str) -> Path:
         """Return the path to the dataset directory."""
         return self.persistent_dir / "datasets" / dataset_id

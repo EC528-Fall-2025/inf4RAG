@@ -22,10 +22,38 @@ from my_rag.utils.validators import validate_upload_request, MAX_UPLOAD_SIZE
 # Initialize services
 # Allow overriding persistent_dir via env var for container volume mounts
 persist_dir = os.getenv("RAG_PERSIST_DIR")
+backend = os.getenv("RAG_BACKEND", "tfidf")
+embedding_provider = os.getenv("RAG_EMBEDDING_PROVIDER", "local")
+embedding_model = os.getenv("RAG_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+
+# Qdrant envs
+qdrant_url = os.getenv("QDRANT_URL")
+qdrant_api_key = os.getenv("QDRANT_API_KEY")
+qdrant_prefix = os.getenv("QDRANT_COLLECTION_PREFIX")
 if persist_dir:
-    cfg = RAGConfig(persistent_dir=Path(persist_dir))
+    cfg = RAGConfig(
+        persistent_dir=Path(persist_dir),
+        backend=backend,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        qdrant_url=qdrant_url or RAGConfig().qdrant_url,
+        qdrant_api_key=qdrant_api_key or RAGConfig().qdrant_api_key,
+        qdrant_collection_prefix=qdrant_prefix or RAGConfig().qdrant_collection_prefix,
+    )
 else:
-    cfg = RAGConfig()
+    cfg = RAGConfig(
+        backend=backend,
+        embedding_provider=embedding_provider,
+        embedding_model=embedding_model,
+        qdrant_url=qdrant_url or RAGConfig().qdrant_url,
+        qdrant_api_key=qdrant_api_key or RAGConfig().qdrant_api_key,
+        qdrant_collection_prefix=qdrant_prefix or RAGConfig().qdrant_collection_prefix,
+    )
+
+if cfg.backend == "faiss" and cfg.embedding_provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+    raise RuntimeError("faiss backend with openai provider requires OPENAI_API_KEY.")
+if cfg.backend == "qdrant" and cfg.embedding_provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+    raise RuntimeError("qdrant backend with openai provider requires OPENAI_API_KEY.")
 pipeline = RAGPipeline(cfg)
 upload_service = UploadService(cfg, pipeline)
 query_service = QueryService(cfg, pipeline)

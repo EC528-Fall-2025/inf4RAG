@@ -1,3 +1,11 @@
 flask>=2.0.0
 numpy>=1.20.0
 orjson>=3.0.0
+faiss-cpu>=1.7.4
+# Embedding providers
+sentence-transformers>=2.2.0
+torch>=2.0.0
+# Optional: OpenAI embeddings (only needed if RAG_EMBEDDING_PROVIDER=openai)
+openai>=1.0.0
+# Qdrant vector database client (optional backend)
+qdrant-client>=1.8.0

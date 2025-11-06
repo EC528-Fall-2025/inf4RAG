@@ -8,11 +8,14 @@ FROM python:${PYTHON_VERSION}-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=on \
-    PIP_DISABLE_PIP_VERSION_CHECK=on
+    PIP_DISABLE_PIP_VERSION_CHECK=on \
+    HF_HOME=/app/.cache/huggingface
 
 # Install build deps only if needed (none for current requirements, keep minimal)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -21,7 +24,15 @@ WORKDIR /app
 
 # Copy requirements and install (pin if desired)
 COPY RAG/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -r requirements.txt gunicorn && \
+    mkdir -p $HF_HOME && \
+    python - <<'PY'
+from sentence_transformers import SentenceTransformer
+try:
+    SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
+except Exception as e:
+    print('Model prewarm skipped:', e)
+PY
 
 # Copy source code
 COPY RAG/ .
@@ -39,7 +50,9 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 # Default environment
 ENV PORT=8001 \
     RAG_PERSIST_DIR=/data \
-    RAG_DEBUG=0
+    RAG_DEBUG=0 \
+    RAG_EMBEDDING_PROVIDER=local \
+    RAG_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 
 # Entrypoint (gunicorn for production)
 # entrypoint:app points to Flask application instance

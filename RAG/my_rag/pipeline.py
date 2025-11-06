@@ -7,6 +7,8 @@ from .config import RAGConfig
 from .file_io import ensure_dir, iter_files, read_text_file
 from .chunker import SimpleTextSplitter
 from .index import RAGIndex, ChunkMeta
+from .index_faiss import RAGFaissIndex
+from .index_qdrant import RAGQdrantIndex
 from .prompts import build_prompt
 
 
@@ -86,9 +88,18 @@ class RAGPipeline:
                 offset += len(chunk)  # Approximate offset tracking
 
         # Build and persist the retrieval index
-        index = RAGIndex(self.cfg)
-        index.build(chunks)
-        index.save(index_dir)
+        if self.cfg.backend == "faiss":
+            index = RAGFaissIndex(self.cfg)
+            index.build(chunks)
+            index.save(index_dir)
+        elif self.cfg.backend == "qdrant":
+            index = RAGQdrantIndex(self.cfg)
+            index.build(dataset_id, chunks)
+            index.save(index_dir)
+        else:
+            index = RAGIndex(self.cfg)
+            index.build(chunks)
+            index.save(index_dir)
 
     # ---------- Query: Retrieve and build prompt ----------
     def generate(
@@ -109,7 +120,12 @@ class RAGPipeline:
             GenerateResult object containing retrieved metadata and constructed prompt.
         """
         index_dir = self.cfg.index_dir(dataset_id)
-        index = RAGIndex.load(self.cfg, index_dir)
+        if self.cfg.backend == "faiss":
+            index = RAGFaissIndex.load(self.cfg, index_dir)
+        elif self.cfg.backend == "qdrant":
+            index = RAGQdrantIndex.load(self.cfg, index_dir)
+        else:
+            index = RAGIndex.load(self.cfg, index_dir)
         k = top_k or self.cfg.default_top_k
 
         # Perform similarity search

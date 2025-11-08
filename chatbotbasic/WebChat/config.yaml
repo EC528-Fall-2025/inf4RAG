@@ -1,6 +1,9 @@
+
 verbose: True
 
+
 description: "### This is a chatbot interface powered by vLLM"
+
 
 examples:
 - How are you?
@@ -9,15 +12,30 @@ examples:
 - Explain the conflict between Zuck and Elon
 - Summarize today's nytimes.com headlines
 
+
 enabled_models:
 - vLLM
+- qwen
+
 
 enabled_browsers:
 - Chrome
 
-openstack_ip_port: "199.94.61.26:8000"
+
+openstack_ip_port: "199.94.61.50"
 api_key: "ec528"
+
 
 temperature: 0.1
 
+
 max_actions: 5
+
+
+qwen:
+  provider: "qwen"
+  base_url: "http://127.0.0.1:8000/v1"
+  api_key: "YOUR_QWEN_API_KEY"
+
+
+ 

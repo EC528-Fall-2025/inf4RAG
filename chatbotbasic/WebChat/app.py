@@ -11,7 +11,9 @@ import os
 
 from models import OpenAIModel
 from tools import Tools
-from qwen_agent import QwenModel
+from qwen_agent.agents import Assistant
+from qwen_agent.tools.base import BaseTool, register_tool
+from qwen_agent.utils.output_beautify import typewriter_print
 
 
 
@@ -32,7 +34,8 @@ MODELS = {
 }
 if "qwen" in config.get("enabled_models", []):
     qwen_config = config.get("qwen", {})
-    MODELS["qwen"] = QwenModel(qwen_config)
+    MODELS["qwen"] = Assistant(**qwen_config)
+
 
 
 verbose = config["verbose"]

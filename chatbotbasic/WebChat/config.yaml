@@ -32,10 +32,9 @@ temperature: 0.1
 max_actions: 5
 
 
-qwen:
-  provider: "qwen"
-  base_url: "http://127.0.0.1:8000/v1"
-  api_key: "YOUR_QWEN_API_KEY"
 
+qwen:
+  model_name: "qwen-7b"
+  api_key: "YOUR_API_KEY"
 
  

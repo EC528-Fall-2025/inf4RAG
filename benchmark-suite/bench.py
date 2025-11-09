@@ -157,7 +157,7 @@ def run_and_archive(config: BenchmarkConfig, test_type: str, **kwargs):
     # Include request rate in the filename for steady tests
     if test_type == "steady" and "request_rate" in kwargs:
         request_rate = kwargs["request_rate"]
-        result_dir = f"bench_{safe_model_name}_{test_type}_{request_rate}qps_{timestamp}"
+        result_dir = f"bench_{safe_model_name}_{test_type}_request-rate-{request_rate}_{timestamp}"
     else:
         result_dir = f"bench_{safe_model_name}_{test_type}_{timestamp}"
     

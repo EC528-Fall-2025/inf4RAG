@@ -151,7 +151,9 @@ def process_results(results_dir, sheet_path, output_path):
             for metric, stats in results.items():
                 for stat_key, stat_name in STATISTICS_OF_INTEREST.items():
                     # Find the correct row index
-                    row_mask = (df.iloc[:, 0] == metric) & (df.iloc[:, 1] == stat_name)
+                    # For Mean: column A has the metric name, column B has "Mean"
+                    # For Median/P99: column A is empty, column B has "Median"/"P99"
+                    row_mask = ((df.iloc[:, 0] == metric) | (df.iloc[:, 0].isna()) | (df.iloc[:, 0] == "")) & (df.iloc[:, 1] == stat_name)
                     if row_mask.any():
                         row_index = df[row_mask].index[0]
                         value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name
@@ -195,7 +197,9 @@ def process_results(results_dir, sheet_path, output_path):
 
                 for metric, stats in results.items():
                     for stat_key, stat_name in STATISTICS_OF_INTEREST.items():
-                        row_mask = (df.iloc[:, 0] == metric) & (df.iloc[:, 1] == stat_name)
+                        # For Mean: column A has the metric name, column B has "Mean"
+                        # For Median/P99: column A is empty, column B has "Median"/"P99"
+                        row_mask = ((df.iloc[:, 0] == metric) | (df.iloc[:, 0].isna()) | (df.iloc[:, 0] == "")) & (df.iloc[:, 1] == stat_name)
                         if row_mask.any():
                             row_index = df[row_mask].index[0]
                             value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name

@@ -174,9 +174,17 @@ def process_results(results_dir, sheet_path, output_path):
                 target_col_letter = None
                 for col_letter in steady_cols:
                     col_idx = ord(col_letter) - ord('A')
-                    if str(tps_row[col_idx]) == str(int(rate)):
-                        target_col_letter = col_letter
-                        break
+                    csv_value = tps_row[col_idx]
+                    # Try to compare as numbers (handle both int and float representations)
+                    try:
+                        if float(csv_value) == float(rate):
+                            target_col_letter = col_letter
+                            break
+                    except (ValueError, TypeError):
+                        # If conversion fails, try string comparison
+                        if str(csv_value) == str(int(rate)):
+                            target_col_letter = col_letter
+                            break
                 
                 if not target_col_letter:
                     click.secho(f"   [!] Could not find a column for request rate {rate} in the sheet. Skipping.", fg="yellow")

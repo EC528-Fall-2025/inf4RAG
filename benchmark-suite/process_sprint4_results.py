@@ -87,7 +87,7 @@ def parse_benchmark_result(archive_path: str) -> dict | None:
             for key, metric_name in METRICS_OF_INTEREST.items():
                 if key in summary:
                     results[metric_name] = {
-                        stat_name: summary[key].get(stat_key)
+                        stat_key: summary[key].get(stat_key)  # Keep lowercase keys
                         for stat_key, stat_name in STATISTICS_OF_INTEREST.items()
                     }
             return results

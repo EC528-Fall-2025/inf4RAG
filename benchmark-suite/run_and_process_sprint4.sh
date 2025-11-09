@@ -104,6 +104,11 @@ done
 echo "--- STEADY benchmarks complete ---"
 echo ""
 
+# Wait for servers to stabilize before flood test
+echo "--- Waiting 15 seconds for servers to stabilize before flood test ---"
+sleep 15
+echo ""
+
 # 5. Run Flood Benchmark
 echo "--- Running FLOOD benchmark ---"
 

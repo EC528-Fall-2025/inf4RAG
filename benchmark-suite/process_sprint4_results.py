@@ -31,6 +31,10 @@ COLUMN_MAP = {
     "pd-disaggregation": {
         "steady": ["O", "P", "Q", "R", "S"],
         "flood": ["T"]
+    },
+    "data-parallelism": {
+        "steady": ["U", "V", "W", "X", "Y"],
+        "flood": ["Z"]
     }
 }
 

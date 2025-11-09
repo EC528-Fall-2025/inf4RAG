@@ -81,6 +81,10 @@ def main():
     PORT = args.port
 
     app = Quart(__name__)
+    
+    # Configure Quart timeouts for high load scenarios
+    app.config['BODY_TIMEOUT'] = 300  # 5 minutes to receive request body
+    app.config['RESPONSE_TIMEOUT'] = 600  # 10 minutes for response
 
     # Initialize the rate limiter and request queue
     rate_limiter = RateLimiter(RATE_LIMIT)

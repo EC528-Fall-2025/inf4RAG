@@ -149,17 +149,23 @@ def process_results(results_dir, sheet_path, output_path):
             click.secho(f"   Type: Flood | Target Column: {col_letter}", fg="blue")
             
             for metric, stats in results.items():
+                # First, find the base row for this metric (the "Mean" row)
+                base_row_mask = (df.iloc[:, 0] == metric) & (df.iloc[:, 1] == "Mean")
+                if not base_row_mask.any():
+                    click.secho(f"   [!] Could not find base row for metric {metric}", fg="yellow")
+                    continue
+                
+                base_row_index = df[base_row_mask].index[0]
+                
+                # Now write each statistic relative to the base row
+                stat_row_offsets = {"Mean": 0, "Median": 1, "P99": 2}
+                
                 for stat_key, stat_name in STATISTICS_OF_INTEREST.items():
-                    # Find the correct row index
-                    # For Mean: column A has the metric name, column B has "Mean"
-                    # For Median/P99: column A is empty, column B has "Median"/"P99"
-                    row_mask = ((df.iloc[:, 0] == metric) | (df.iloc[:, 0].isna()) | (df.iloc[:, 0] == "")) & (df.iloc[:, 1] == stat_name)
-                    if row_mask.any():
-                        row_index = df[row_mask].index[0]
-                        value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name
-                        if value is not None:
-                            df.iat[row_index, col_index] = round(value, 4)
-                            click.echo(f"     - Wrote {metric}/{stat_name}: {value:.4f} to ({row_index+1}, {col_letter})")
+                    row_index = base_row_index + stat_row_offsets[stat_name]
+                    value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name
+                    if value is not None:
+                        df.iat[row_index, col_index] = round(value, 4)
+                        click.echo(f"     - Wrote {metric}/{stat_name}: {value:.4f} to ({row_index+1}, {col_letter})")
 
         else: # Steady test
             rate = extract_request_rate_from_filename(filename)
@@ -196,16 +202,23 @@ def process_results(results_dir, sheet_path, output_path):
                 click.secho(f"   Type: Steady | Rate: {rate} req/s | Target Column: {target_col_letter}", fg="blue")
 
                 for metric, stats in results.items():
+                    # First, find the base row for this metric (the "Mean" row)
+                    base_row_mask = (df.iloc[:, 0] == metric) & (df.iloc[:, 1] == "Mean")
+                    if not base_row_mask.any():
+                        click.secho(f"   [!] Could not find base row for metric {metric}", fg="yellow")
+                        continue
+                    
+                    base_row_index = df[base_row_mask].index[0]
+                    
+                    # Now write each statistic relative to the base row
+                    stat_row_offsets = {"Mean": 0, "Median": 1, "P99": 2}
+                    
                     for stat_key, stat_name in STATISTICS_OF_INTEREST.items():
-                        # For Mean: column A has the metric name, column B has "Mean"
-                        # For Median/P99: column A is empty, column B has "Median"/"P99"
-                        row_mask = ((df.iloc[:, 0] == metric) | (df.iloc[:, 0].isna()) | (df.iloc[:, 0] == "")) & (df.iloc[:, 1] == stat_name)
-                        if row_mask.any():
-                            row_index = df[row_mask].index[0]
-                            value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name
-                            if value is not None:
-                                df.iat[row_index, col_index] = round(value, 4)
-                                click.echo(f"     - Wrote {metric}/{stat_name}: {value:.4f} to ({row_index+1}, {target_col_letter})")
+                        row_index = base_row_index + stat_row_offsets[stat_name]
+                        value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name
+                        if value is not None:
+                            df.iat[row_index, col_index] = round(value, 4)
+                            click.echo(f"     - Wrote {metric}/{stat_name}: {value:.4f} to ({row_index+1}, {target_col_letter})")
 
             except Exception as e:
                 click.secho(f"   [!] An error occurred during steady processing: {e}", fg="red")

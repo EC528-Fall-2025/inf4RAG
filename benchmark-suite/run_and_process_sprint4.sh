@@ -33,6 +33,7 @@ MODEL_TYPE=${MODEL_TYPE:-"chat"}
 # File and directory settings
 BASE_RESULTS_DIR="sprint4_results"
 DEFAULT_SHEET_NAME="vLLM benchmark EC528 - Sprint4.csv"
+RESULTS_SHEET_NAME="vLLM_benchmark_EC528_-_Sprint4_RESULTS.csv"
 
 # --- Script Logic ---
 
@@ -55,6 +56,13 @@ BENCH_SCRIPT_PATH="${SCRIPT_DIR}/bench.py"
 PROCESS_SCRIPT_PATH="${SCRIPT_DIR}/process_sprint4_results.py"
 TARGET_DIR="${SCRIPT_DIR}/${BASE_RESULTS_DIR}/${EXPERIMENT_SET_NAME}"
 SHEET_PATH="${SCRIPT_DIR}/${SHEET_ARG}"
+RESULTS_PATH="${SCRIPT_DIR}/${RESULTS_SHEET_NAME}"
+
+# If the results CSV already exists, use it as input; otherwise use the template
+if [ -f "$RESULTS_PATH" ]; then
+    echo "Using existing results file: ${RESULTS_PATH}"
+    SHEET_PATH="$RESULTS_PATH"
+fi
 
 # Verify that the necessary scripts and sheet exist
 if [ ! -f "$BENCH_SCRIPT_PATH" ]; then

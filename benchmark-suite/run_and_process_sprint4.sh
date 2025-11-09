@@ -106,11 +106,24 @@ echo ""
 
 # 5. Run Flood Benchmark
 echo "--- Running FLOOD benchmark ---"
-python3 "$BENCH_SCRIPT_PATH" \
-  --host "$HOST" \
-  --port "$PORT" \
-  --model-type "$MODEL_TYPE" \
-  flood
+
+# Reduce flood test intensity for PD disaggregation (it uses 2-stage processing)
+if [ "$EXPERIMENT_SET_NAME" = "pd-disaggregation" ]; then
+  echo "Note: Using reduced intensity (256 prompts) for PD disaggregation"
+  python3 "$BENCH_SCRIPT_PATH" \
+    --host "$HOST" \
+    --port "$PORT" \
+    --model-type "$MODEL_TYPE" \
+    flood --num-prompts 256
+else
+  # Standard flood test for other configurations
+  python3 "$BENCH_SCRIPT_PATH" \
+    --host "$HOST" \
+    --port "$PORT" \
+    --model-type "$MODEL_TYPE" \
+    flood
+fi
+
 echo "--- FLOOD benchmark complete ---"
 echo ""
 

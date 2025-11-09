@@ -165,6 +165,34 @@ def main():
                 content_type="application/json",
             )
 
+    @app.route("/v1/models", methods=["GET"])
+    async def list_models():
+        """Forward model listing request to prefill service"""
+        try:
+            async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
+                async with session.get(f"{PREFILL_SERVICE_URL.rsplit('/v1/', 1)[0]}/v1/models") as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return Response(
+                            response=await response.text(),
+                            status=200,
+                            content_type="application/json",
+                        )
+                    else:
+                        logger.error("Failed to get models from prefill service: %s", response.status)
+                        return Response(
+                            response=b'{"error": "Failed to get models"}',
+                            status=response.status,
+                            content_type="application/json",
+                        )
+        except Exception as e:
+            logger.exception("Error listing models: %s", str(e))
+            return Response(
+                response=b'{"error": "Internal server error"}',
+                status=500,
+                content_type="application/json",
+            )
+
     @app.route("/v1/completions", methods=["POST"])
     async def handle_request():
         """Handle incoming API requests with concurrency and rate limiting"""

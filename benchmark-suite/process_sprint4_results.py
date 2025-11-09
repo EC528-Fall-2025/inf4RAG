@@ -21,16 +21,16 @@ STATISTICS_OF_INTEREST = {
 # Column headers from the CSV for each experiment set
 COLUMN_MAP = {
     "tensor-parallelism": {
-        "steady": ["B", "C", "D", "E", "F"],
-        "flood": ["G"]
+        "steady": ["C", "D", "E", "F", "G"],
+        "flood": ["H"]
     },
     "pipeline-parallelism": {
-        "steady": ["H", "I", "J", "K", "L"],
-        "flood": ["M"]
+        "steady": ["I", "J", "K", "L", "M"],
+        "flood": ["N"]
     },
     "pd-disaggregation": {
-        "steady": ["N", "O", "P", "Q", "R"],
-        "flood": ["S"]
+        "steady": ["O", "P", "Q", "R", "S"],
+        "flood": ["T"]
     }
 }
 

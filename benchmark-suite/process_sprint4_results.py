@@ -50,11 +50,12 @@ def extract_request_rate_from_filename(filename: str) -> float | None:
     """Extracts the request rate from the benchmark archive filename."""
     # Example: bench_..._steady_request-rate-16.0_...tar.gz
     parts = filename.split('_')
-    for i, part in enumerate(parts):
-        if part == "rate" and i > 0 and parts[i-1] == "request":
+    for part in parts:
+        if part.startswith("request-rate-"):
             try:
-                return float(parts[i+1])
-            except (ValueError, IndexError):
+                rate_str = part.replace("request-rate-", "")
+                return float(rate_str)
+            except ValueError:
                 return None
     return None
 

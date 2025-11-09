@@ -154,7 +154,7 @@ def process_results(results_dir, sheet_path, output_path):
                     row_mask = (df.iloc[:, 0] == metric) & (df.iloc[:, 1] == stat_name)
                     if row_mask.any():
                         row_index = df[row_mask].index[0]
-                        value = stats.get(stat_name)
+                        value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name
                         if value is not None:
                             df.iat[row_index, col_index] = round(value, 4)
                             click.echo(f"     - Wrote {metric}/{stat_name}: {value:.4f} to ({row_index+1}, {col_letter})")
@@ -198,7 +198,7 @@ def process_results(results_dir, sheet_path, output_path):
                         row_mask = (df.iloc[:, 0] == metric) & (df.iloc[:, 1] == stat_name)
                         if row_mask.any():
                             row_index = df[row_mask].index[0]
-                            value = stats.get(stat_name)
+                            value = stats.get(stat_key)  # Use stat_key (lowercase) not stat_name
                             if value is not None:
                                 df.iat[row_index, col_index] = round(value, 4)
                                 click.echo(f"     - Wrote {metric}/{stat_name}: {value:.4f} to ({row_index+1}, {target_col_letter})")

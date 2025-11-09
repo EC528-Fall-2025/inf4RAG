@@ -243,8 +243,11 @@ def bench(ctx, num_prompts, prefill_size, max_sequence_length, host, port, model
 @click.pass_obj
 def steady_testing(config: BenchmarkConfig, **kwargs):
     inner_config = copy.deepcopy(config)
-    
-    # Pass duration directly to vLLM instead of calculating num_prompts
+
+    # Overwrite the number of prompts
+    duration = kwargs.pop("duration")
+    inner_config.num_prompts = math.ceil(duration * kwargs["request_rate"])
+
     run_and_archive(inner_config, "steady", **kwargs)
 
 @bench.command("flood")

@@ -32,9 +32,22 @@ config["base_url"] = f"http://{config.get('openstack_ip_port', '127.0.0.1:8000')
 MODELS = {
     "vLLM": OpenAIModel(config)
 }
+
+
 if "qwen" in config.get("enabled_models", []):
     qwen_config = config.get("qwen", {})
-    MODELS["qwen"] = Assistant(**qwen_config)
+    llm_cfg = {
+        "model": qwen_config.get("model_name", "qwen-max-latest"),
+        "model_type": qwen_config.get("model_type", "qwen_dashscope"),
+        "api_key": qwen_config.get("api_key", os.getenv("DASHSCOPE_API_KEY")),
+    }
+
+    MODELS["qwen"] = Assistant(
+        llm=llm_cfg,
+        system_message=qwen_config.get("system_message", "You are a helpful AI assistant."),
+        function_list=qwen_config.get("tools", []),
+        files=qwen_config.get("files", [])
+    )
 
 
 
@@ -156,7 +169,7 @@ def generate(new_user_message, history, use_rag=False):
                 print(f"ITERATION {iters}")
                 print("="*80)
                 print(prompt)
-
+            iters += 1
 
             stream = model.generate(
                 system_message,
@@ -166,17 +179,20 @@ def generate(new_user_message, history, use_rag=False):
             )
 
 
-            # Collect all chunks into full_response
+
+            tool_called = False
+
+             # Collect all chunks into full_response
             for chunk in stream:
                 completion = model.parse_completion(chunk)
                 if completion:
                     full_response += completion
-                    yield full_response  
 
 
                     tool_match = re.search(r"<tool_call>(.*?)</tool_call>", completion)
                     if tool_match:
                         tool_name = tool_match.group(1).strip()
+                        tool_called = True
                         if verbose:
                             print(f"🔧 (AGENTIC) Detected tool call: {tool_name}")
 
@@ -195,10 +211,11 @@ def generate(new_user_message, history, use_rag=False):
                             # Break the inner stream loop to restart generation with tool result
                             break
 
-
-           
+                        
+            if not tool_called:
+                break
             # Exit the while loop after processing the stream
-            break
+            
    
     except Exception as e:
         full_response += f"\n<span style='color:red'>Error: {e}</span>"

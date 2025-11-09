@@ -22,7 +22,7 @@ enabled_browsers:
 - Chrome
 
 
-openstack_ip_port: "199.94.61.50"
+openstack_ip_port: "199.94.60.39:8000"
 api_key: "ec528"
 
 
@@ -34,7 +34,7 @@ max_actions: 5
 
 
 qwen:
-  model_name: "qwen-7b"
+  model_name: "qwen-4b"
   api_key: "YOUR_API_KEY"
 
  

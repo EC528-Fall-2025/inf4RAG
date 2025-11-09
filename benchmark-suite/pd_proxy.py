@@ -133,6 +133,7 @@ def main():
                             yield chunk_bytes
                     else:
                         # Handle backend service errors
+                        # Read full response to avoid connection leak
                         error_text = await response.text()
                         logger.error(
                             "Backend service error: %s - %s",
@@ -148,6 +149,10 @@ def main():
                 # Handle timeout errors
                 logger.error("Timeout connecting to %s", url)
                 yield b'{"error": "Service timeout"}'
+            except Exception as e:
+                # Catch all other errors
+                logger.error("Unexpected error forwarding to %s: %s", url, str(e))
+                yield b'{"error": "Internal server error"}'
 
     async def process_request():
         """Process a single request through prefill and decode stages"""
@@ -167,9 +172,17 @@ def main():
             prefill_request = original_request_data.copy()
             prefill_request["max_tokens"] = 1
 
-            # Execute prefill stage
-            async for _ in forward_request(prefill_url, prefill_request):
-                continue
+            # Execute prefill stage and ensure we consume the entire response
+            try:
+                async for _ in forward_request(prefill_url, prefill_request):
+                    pass  # Consume all chunks to ensure cleanup
+            except Exception as e:
+                logger.error("Error during prefill stage: %s", str(e))
+                return Response(
+                    response=b'{"error": "Prefill stage failed"}',
+                    status=500,
+                    content_type="application/json",
+                )
 
             # Execute decode stage and stream response
             generator = forward_request(decode_url, original_request_data)

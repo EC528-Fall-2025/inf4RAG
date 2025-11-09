@@ -153,7 +153,13 @@ def run_and_archive(config: BenchmarkConfig, test_type: str, **kwargs):
     # 1. Generate a unique result directory name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_model_name = config.model.replace('/','_')
-    result_dir = f"bench_{safe_model_name}_{test_type}_{timestamp}"
+    
+    # Include request rate in the filename for steady tests
+    if test_type == "steady" and "request_rate" in kwargs:
+        request_rate = kwargs["request_rate"]
+        result_dir = f"bench_{safe_model_name}_{test_type}_{request_rate}qps_{timestamp}"
+    else:
+        result_dir = f"bench_{safe_model_name}_{test_type}_{timestamp}"
     
     # Create the directory for our results
     os.makedirs(result_dir, exist_ok=True)

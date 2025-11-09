@@ -85,6 +85,9 @@ def main():
     # Initialize the rate limiter and request queue
     rate_limiter = RateLimiter(RATE_LIMIT)
     request_queue = RequestQueue(MAX_CONCURRENT_REQUESTS, REQUEST_QUEUE_SIZE)
+    
+    # Create a shared aiohttp session to avoid file descriptor leaks
+    http_session = None
 
     # Attach the configuration object to the application instance
     app.config.update(
@@ -101,19 +104,27 @@ def main():
     @app.before_serving
     async def startup():
         """Start request processing task when app starts serving"""
+        nonlocal http_session
+        # Create a single shared session with connector limits
+        connector = aiohttp.TCPConnector(limit=MAX_CONCURRENT_REQUESTS * 2, limit_per_host=MAX_CONCURRENT_REQUESTS)
+        http_session = aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT, connector=connector)
         asyncio.create_task(request_queue.process())
+    
+    @app.after_serving
+    async def shutdown():
+        """Clean up resources on shutdown"""
+        nonlocal http_session
+        if http_session:
+            await http_session.close()
 
     async def forward_request(url, data):
         """Forward request to backend service with rate limiting and error handling"""
         headers = {"Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}"}
 
         # Use rate limiter as context manager
-        async with (
-            rate_limiter,
-            aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session,
-        ):
+        async with rate_limiter:
             try:
-                async with session.post(
+                async with http_session.post(
                     url=url, json=data, headers=headers
                 ) as response:
                     if response.status == 200:
@@ -178,22 +189,21 @@ def main():
     async def list_models():
         """Forward model listing request to prefill service"""
         try:
-            async with aiohttp.ClientSession(timeout=AIOHTTP_TIMEOUT) as session:
-                async with session.get(f"{PREFILL_SERVICE_URL.rsplit('/v1/', 1)[0]}/v1/models") as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return Response(
-                            response=await response.text(),
-                            status=200,
-                            content_type="application/json",
-                        )
-                    else:
-                        logger.error("Failed to get models from prefill service: %s", response.status)
-                        return Response(
-                            response=b'{"error": "Failed to get models"}',
-                            status=response.status,
-                            content_type="application/json",
-                        )
+            async with http_session.get(f"{PREFILL_SERVICE_URL.rsplit('/v1/', 1)[0]}/v1/models") as response:
+                if response.status == 200:
+                    response_text = await response.text()
+                    return Response(
+                        response=response_text,
+                        status=200,
+                        content_type="application/json",
+                    )
+                else:
+                    logger.error("Failed to get models from prefill service: %s", response.status)
+                    return Response(
+                        response=b'{"error": "Failed to get models"}',
+                        status=response.status,
+                        content_type="application/json",
+                    )
         except Exception as e:
             logger.exception("Error listing models: %s", str(e))
             return Response(

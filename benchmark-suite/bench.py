@@ -6,6 +6,8 @@ import math
 import subprocess
 import shutil
 from datetime import datetime
+import re
+import json
 
 vllm_bench_serve_template = \
 """
@@ -18,9 +20,49 @@ vllm bench serve \\
     --host {host} \\
     --port {port} \\
     --ignore-eos \\
-    --save-result \\
-    --result-dir {result_dir} \\
 """
+# NOTE: --save-result and --result-dir are removed as we now parse stdout
+
+def parse_summary_from_output(output: str) -> dict:
+    """
+    Parses the vLLM benchmark summary table from the stdout text.
+    """
+    summary = {
+        "ttft_ms": {},
+        "tpot_ms": {},
+        "itl_ms": {}
+    }
+    
+    # Regex to find the metric lines, e.g., "Mean TTFT (ms): 123.45"
+    patterns = {
+        "ttft_ms": {
+            "mean": r"Mean TTFT \(ms\):\s+([\d.]+)",
+            "median": r"Median TTFT \(ms\):\s+([\d.]+)",
+            "p99": r"P99 TTFT \(ms\):\s+([\d.]+)"
+        },
+        "tpot_ms": {
+            "mean": r"Mean TPOT \(ms\):\s+([\d.]+)",
+            "median": r"Median TPOT \(ms\):\s+([\d.]+)",
+            "p99": r"P99 TPOT \(ms\):\s+([\d.]+)"
+        },
+        "itl_ms": {
+            "mean": r"Mean ITL \(ms\):\s+([\d.]+)",
+            "median": r"Median ITL \(ms\):\s+([\d.]+)",
+            "p99": r"P99 ITL \(ms\):\s+([\d.]+)"
+        }
+    }
+    
+    for metric_key, metric_patterns in patterns.items():
+        for stat_key, pattern in metric_patterns.items():
+            match = re.search(pattern, output)
+            if match:
+                summary[metric_key][stat_key] = float(match.group(1))
+
+    # Check if we found anything
+    if not any(summary[key] for key in summary):
+        raise ValueError("Could not parse summary statistics from benchmark output.")
+        
+    return summary
 
 def fetch_model_name(base_url: str) -> str:
     """Fetch the available model names from the server."""
@@ -60,8 +102,6 @@ class BenchmarkConfig:
         self.port = port
         self.model_type = model_type
         
-        self.result_dir = None 
-        
         # Define base_url *before* using it
         self.base_url = f"http://{self.host}:{self.port}/v1"
         
@@ -75,17 +115,13 @@ class BenchmarkConfig:
             self.additional_args[key] = value
     
     def get_command(self):
-        if self.result_dir is None:
-            raise ValueError("result_dir is not set. This should be set before calling get_command.")
-            
         basic_command = vllm_bench_serve_template.format(
             model=self.model,
             num_prompts=self.num_prompts,
             prefill_size=self.prefill_size,
             max_sequence_length=self.max_sequence_length, # This name is used in the template
             host=self.host,
-            port=self.port,
-            result_dir=self.result_dir
+            port=self.port
         )
 
         full_command = basic_command
@@ -110,16 +146,17 @@ class BenchmarkConfig:
 # This function contains the logic to run, archive, and clean up.
 def run_and_archive(config: BenchmarkConfig, test_type: str, **kwargs):
     """
-    Runs the benchmark, archives results, and cleans up.
+    Runs the benchmark, captures stdout, parses it, saves results, and cleans up.
     """
     config.add_new_arguments(**kwargs)
     
     # 1. Generate a unique result directory name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # Clean up model name for use in filename
     safe_model_name = config.model.replace('/','_')
     result_dir = f"bench_{safe_model_name}_{test_type}_{timestamp}"
-    config.result_dir = result_dir
+    
+    # Create the directory for our results
+    os.makedirs(result_dir, exist_ok=True)
     
     # 2. Get the full shell command
     command_to_run = config.get_command()
@@ -131,18 +168,34 @@ def run_and_archive(config: BenchmarkConfig, test_type: str, **kwargs):
     click.echo("-" * 50)
     
     try:
-        # 3. Execute the benchmark command
-        subprocess.run(command_to_run, shell=True, check=True, text=True)
+        # 3. Execute the benchmark command and CAPTURE output
+        result = subprocess.run(
+            command_to_run, 
+            shell=True, 
+            check=True, 
+            text=True,
+            capture_output=True # Capture stdout and stderr
+        )
         
-        click.secho(f"\n--- Benchmark complete. Archiving results... ---", fg="green")
+        click.echo("--- Benchmark command finished. Parsing output... ---")
         
-        # 4. Create a .tar.gz archive
-        archive_name = f"{result_dir}"
+        # 4. Parse the summary from stdout
+        summary_data = parse_summary_from_output(result.stdout)
+        
+        # 5. Write our own results.json
+        results_json_path = os.path.join(result_dir, "results.json")
+        with open(results_json_path, "w") as f:
+            json.dump({"summary": summary_data}, f, indent=4)
+            
+        click.secho(f"--- Successfully parsed and saved results to {results_json_path} ---", fg="green")
+
+        # 6. Create a .tar.gz archive
+        archive_name = result_dir
         shutil.make_archive(archive_name, 'gztar', result_dir)
         
         click.secho(f"--- Successfully created archive: {archive_name}.tar.gz ---", fg="green")
         
-        # 5. Clean up the original results directory
+        # 7. Clean up the original results directory
         click.echo(f"--- Cleaning up results directory: {result_dir} ---")
         shutil.rmtree(result_dir)
         click.echo("--- Done. ---")
@@ -150,7 +203,8 @@ def run_and_archive(config: BenchmarkConfig, test_type: str, **kwargs):
     except subprocess.CalledProcessError as e:
         click.secho(f"\n--- Benchmark FAILED ---", fg="red")
         click.secho(f"Return code: {e.returncode}", fg="red")
-        click.secho("Benchmark directory with logs (if any) was NOT deleted.", fg="yellow")
+        click.secho(f"Stderr:\n{e.stderr}", fg="yellow")
+        # Don't delete the directory on failure so logs can be inspected
         click.secho(f"Please check directory: {result_dir}", fg="yellow")
     except Exception as e:
         click.secho(f"\n--- An unexpected error occurred ---", fg="red")

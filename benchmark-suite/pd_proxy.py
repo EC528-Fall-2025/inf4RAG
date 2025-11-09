@@ -142,17 +142,26 @@ def main():
         """Process a single request through prefill and decode stages"""
         try:
             original_request_data = await request.get_json()
+            
+            # Determine which endpoint to use based on the request path
+            endpoint_path = request.path  # e.g., "/v1/chat/completions" or "/v1/completions"
+            
+            # Build full URLs with the correct endpoint
+            prefill_base = PREFILL_SERVICE_URL.rsplit('/v1/', 1)[0]
+            decode_base = DECODE_SERVICE_URL.rsplit('/v1/', 1)[0]
+            prefill_url = f"{prefill_base}{endpoint_path}"
+            decode_url = f"{decode_base}{endpoint_path}"
 
             # Create prefill request (max_tokens=1)
             prefill_request = original_request_data.copy()
             prefill_request["max_tokens"] = 1
 
             # Execute prefill stage
-            async for _ in forward_request(PREFILL_SERVICE_URL, prefill_request):
+            async for _ in forward_request(prefill_url, prefill_request):
                 continue
 
             # Execute decode stage and stream response
-            generator = forward_request(DECODE_SERVICE_URL, original_request_data)
+            generator = forward_request(decode_url, original_request_data)
             response = await make_response(generator)
             response.timeout = None  # Disable timeout for streaming response
             return response
@@ -194,6 +203,7 @@ def main():
             )
 
     @app.route("/v1/completions", methods=["POST"])
+    @app.route("/v1/chat/completions", methods=["POST"])
     async def handle_request():
         """Handle incoming API requests with concurrency and rate limiting"""
         # Create task for request processing

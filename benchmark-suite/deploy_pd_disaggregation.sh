@@ -60,7 +60,7 @@ CUDA_VISIBLE_DEVICES=0 vllm serve $MODEL_NAME \
 PRODUCER_PID=$!
 
 # Give producer a moment to bind to the ZMQ port first
-sleep 5
+sleep 10
 
 CUDA_VISIBLE_DEVICES=1 vllm serve $MODEL_NAME \
     --port 8200 \

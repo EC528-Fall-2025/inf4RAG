@@ -4,6 +4,7 @@
 # and then transfer the KV cache between them.
 
 set -xe
+unset VLLM_HOST_IP
 
 echo "🚧🚧 Warning: The usage of disaggregated prefill is experimental and subject to change 🚧🚧"
 sleep 1

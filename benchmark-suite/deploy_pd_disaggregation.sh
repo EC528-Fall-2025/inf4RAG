@@ -25,7 +25,7 @@ cleanup() {
     exit 0
 }
 
-# export VLLM_HOST_IP=$(hostname -I | awk '{print $1}')
+export VLLM_HOST_IP=$(hostname -I | awk '{print $1}')
 
 # install quart first -- required for disagg prefill proxy serve
 if python3 -c "import quart" &> /dev/null; then
@@ -49,32 +49,23 @@ wait_for_server() {
 
 # prefilling instance, which is the KV producer
 # Launch BOTH instances in background simultaneously
+# prefilling instance, which is the KV producer
 CUDA_VISIBLE_DEVICES=0 vllm serve $MODEL_NAME \
     --port 8100 \
     --max-model-len 100 \
     --gpu-memory-utilization 0.8 \
     --trust-remote-code \
     --kv-transfer-config \
-    '{"kv_connector":"P2pNcclConnector","kv_role":"kv_producer","kv_rank":0,"kv_parallel_size":2,"kv_ip":"127.0.0.1","kv_port":14100,"kv_connector_extra_config":{"http_port":9100}}' &
+    '{"kv_connector":"P2pNcclConnector","kv_role":"kv_producer","kv_rank":0,"kv_parallel_size":2}' &
 
-PRODUCER_PID=$!
-
-# Give producer a moment to bind to the ZMQ port first
-sleep 10
-
+# decoding instance, which is the KV consumer
 CUDA_VISIBLE_DEVICES=1 vllm serve $MODEL_NAME \
     --port 8200 \
     --max-model-len 100 \
     --gpu-memory-utilization 0.8 \
     --trust-remote-code \
     --kv-transfer-config \
-    '{"kv_connector":"P2pNcclConnector","kv_role":"kv_consumer","kv_rank":1,"kv_parallel_size":2,"kv_ip":"127.0.0.1","kv_port":14100,"kv_connector_extra_config":{"http_port":9200}}' &
-
-CONSUMER_PID=$!
-
-# Now wait for BOTH to be ready
-wait_for_server 8100
-wait_for_server 8200
+    '{"kv_connector":"P2pNcclConnector","kv_role":"kv_consumer","kv_rank":1,"kv_parallel_size":2}' &
 
 # launch a proxy server that opens the service at port 8000
 # the workflow of this proxy:

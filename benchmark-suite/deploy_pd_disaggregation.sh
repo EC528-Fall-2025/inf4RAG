@@ -48,6 +48,7 @@ wait_for_server() {
 # You can also adjust --kv-ip and --kv-port for distributed inference.
 
 # prefilling instance, which is the KV producer
+# Launch BOTH instances in background simultaneously
 CUDA_VISIBLE_DEVICES=0 vllm serve $MODEL_NAME \
     --port 8100 \
     --max-model-len 100 \
@@ -55,9 +56,12 @@ CUDA_VISIBLE_DEVICES=0 vllm serve $MODEL_NAME \
     --trust-remote-code \
     --kv-transfer-config \
     '{"kv_connector":"P2pNcclConnector","kv_role":"kv_producer","kv_rank":0,"kv_parallel_size":2,"kv_ip":"127.0.0.1","kv_port":14100,"kv_connector_extra_config":{"http_port":9100}}' &
-wait_for_server 8100
 
-# decoding instance, which is the KV consumer
+PRODUCER_PID=$!
+
+# Give producer a moment to bind to the ZMQ port first
+sleep 5
+
 CUDA_VISIBLE_DEVICES=1 vllm serve $MODEL_NAME \
     --port 8200 \
     --max-model-len 100 \
@@ -66,7 +70,10 @@ CUDA_VISIBLE_DEVICES=1 vllm serve $MODEL_NAME \
     --kv-transfer-config \
     '{"kv_connector":"P2pNcclConnector","kv_role":"kv_consumer","kv_rank":1,"kv_parallel_size":2,"kv_ip":"127.0.0.1","kv_port":14100,"kv_connector_extra_config":{"http_port":9200}}' &
 
-# wait until prefill and decode instances are ready
+CONSUMER_PID=$!
+
+# Now wait for BOTH to be ready
+wait_for_server 8100
 wait_for_server 8200
 
 # launch a proxy server that opens the service at port 8000

@@ -75,6 +75,15 @@ CUDA_VISIBLE_DEVICES=1 vllm serve $MODEL_NAME \
 #   instance
 # NOTE: the usage of this API is subject to change --- in the future we will 
 # introduce "vllm connect" to connect between prefill and decode instances
+# ⬇️⬇️ ADD THESE MISSING LINES ⬇️⬇️
+# wait until prefill and decode instances are ready
+echo "Waiting for prefill server (8100) to be ready..."
+wait_for_server 8100
+echo "Waiting for decode server (8200) to be ready..."
+wait_for_server 8200
+echo "✅ Servers are ready!"
+# ⬆️⬆️ ADD THESE MISSING LINES ⬆️⬆️
+
 python3 pd_proxy.py &
 sleep 1
 

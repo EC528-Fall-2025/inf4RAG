@@ -24,7 +24,7 @@ cleanup() {
     exit 0
 }
 
-export VLLM_HOST_IP=$(hostname -I | awk '{print $1}')
+# export VLLM_HOST_IP=$(hostname -I | awk '{print $1}')
 
 # install quart first -- required for disagg prefill proxy serve
 if python3 -c "import quart" &> /dev/null; then

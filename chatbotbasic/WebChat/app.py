@@ -1,368 +1,165 @@
-from __future__ import annotations
-
-
-import re
-import datetime
-import gradio as gr
-import yaml
-import requests
-import os
-
-
-from models import OpenAIModel
-from tools import Tools
-from qwen_agent.agents import Assistant
-from qwen_agent.tools.base import BaseTool, register_tool
-from qwen_agent.utils.output_beautify import typewriter_print
-
-
-
-
-SYSTEM_MESSAGE_TEMPLATE = "prompt.txt"
-
-
-with open("config.yaml", "r") as config_file:
-    config = yaml.safe_load(config_file)
-
-
-# synthesize the base_url
-config["base_url"] = f"http://{config.get('openstack_ip_port', '127.0.0.1:8000')}/v1"
-
-
-MODELS = {
-    "vLLM": OpenAIModel(config)
-}
-
-
-if "qwen" in config.get("enabled_models", []):
-    qwen_config = config.get("qwen", {})
-    llm_cfg = {
-        "model": qwen_config.get("model_name", "qwen-max-latest"),
-        "model_type": qwen_config.get("model_type", "qwen_dashscope"),
-        "api_key": qwen_config.get("api_key", os.getenv("DASHSCOPE_API_KEY")),
-    }
-
-    MODELS["qwen"] = Assistant(
-        llm=llm_cfg,
-        system_message=qwen_config.get("system_message", "You are a helpful AI assistant."),
-        function_list=qwen_config.get("tools", []),
-        files=qwen_config.get("files", [])
-    )
-
-
-
-verbose = config["verbose"]
-description = config["description"]
-examples = config["examples"]
-temperature = config["temperature"]
-max_actions = config["max_actions"]
-
-
-# RAG Configuration
-RAG_SERVICE_URL = "http://localhost:8001"
-
-
-llm_tools = Tools()
-
-
-def create_system_message():
-    """
-    Return system message, including today's date and the available tools.
-    """
-    with open(SYSTEM_MESSAGE_TEMPLATE) as f:
-        message = f.read()
-
-
-    now = datetime.datetime.now()
-    current_date = now.strftime("%B %d, %Y")
-
-
-    message = message.replace("{{CURRENT_DATE}}", current_date)
-
-
-    return message
-
-
-def check_rag_service():
-    """Check if RAG service is available"""
-    try:
-        response = requests.get(f"{RAG_SERVICE_URL}/rag/health", timeout=2)
-        return response.status_code == 200
-    except:
-        return False
-
-
-def upload_file_to_rag(file, dataset_id):
-    """Upload file to RAG service"""
-    if file is None:
-        return "No file selected"
-   
-    try:
-        # Read the file
-        with open(file.name, 'rb') as f:
-            files = {'file': f}
-            data = {'dataset_id': dataset_id}
-           
-            response = requests.post(
-                f"{RAG_SERVICE_URL}/rag/upload",
-                files=files,
-                data=data,
-                timeout=120
-            )
-       
-        if response.status_code == 200:
-            result = response.json()
-            return f"✓ Upload successful! Processed {result.get('file_count', 0)} files to dataset '{dataset_id}'"
-        else:
-            return f"✗ Upload failed: {response.text}"
-           
-    except requests.exceptions.ConnectionError:
-        return f"✗ Error: Cannot connect to RAG service at {RAG_SERVICE_URL}. Please ensure RAG service is running."
-    except Exception as e:
-        return f"✗ Error: {str(e)}"
-
-
-def generate(new_user_message, history, use_rag=False):
-    # Only use RAG if enabled
-    if use_rag:
-        try:
-            response = requests.post(
-                f"{RAG_SERVICE_URL}/rag/query",
-                json={
-                    "query": new_user_message,
-                    "dataset_id": "default-dataset",
-                    "top_k": 4
-                },
-                timeout=30
-            )
-           
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("status") == "success":
-                    # Use RAG-generated prompt
-                    prompt = result["prompt"]
-                    if verbose:
-                        print(f"[RAG] Using retrieved context with {result['retrieved_count']} documents")
-                else:
-                    prompt = new_user_message
-            else:
-                prompt = new_user_message
-        except Exception as e:
-            if verbose:
-                print(f"[RAG] Error: {e}")
-            prompt = new_user_message
-    else:
-        # Normal mode - use original query
-        prompt = new_user_message
-
-
-    # Collect full response from stream
-    full_response = ""
-    iters = 0
-    model = MODELS["vLLM"]
-
-
-    try:
-        while True:
-            if verbose:
-                print("="*80)
-                print(f"ITERATION {iters}")
-                print("="*80)
-                print(prompt)
-            iters += 1
-
-            stream = model.generate(
-                system_message,
-                prompt,
-                history=history,
-                temperature=temperature
-            )
-
-
-
-            tool_called = False
-
-             # Collect all chunks into full_response
-            for chunk in stream:
-                completion = model.parse_completion(chunk)
-                if completion:
-                    full_response += completion
-
-
-                    tool_match = re.search(r"<tool_call>(.*?)</tool_call>", completion)
-                    if tool_match:
-                        tool_name = tool_match.group(1).strip()
-                        tool_called = True
-                        if verbose:
-                            print(f"🔧 (AGENTIC) Detected tool call: {tool_name}")
-
-
-                         #GoogleSearch agentic tool
-                        if tool_name.lower() == "googlesearch":
-                            query_match = re.search(r"<query>(.*?)</query>", completion)
-                            query = query_match.group(1) if query_match else prompt
-                            result = llm_tools.google_search(query)
-
-
-                            # Append tool result to prompt for next iteration
-                            prompt += f"\n<RESULT>{result}</RESULT>"
-
-
-                            # Break the inner stream loop to restart generation with tool result
-                            break
-
-                        
-            if not tool_called:
-                break
-            # Exit the while loop after processing the stream
-            
-   
-    except Exception as e:
-        full_response += f"\n<span style='color:red'>Error: {e}</span>"
-   
-    # Return the final response string instead of a generator
-    return full_response
-
-
-
-
-def on_rag_mode_toggle(button_state):
-    """Handle RAG mode toggle button click"""
-    global current_rag_mode
-   
-    if current_rag_mode:
-        # Currently in RAG mode, switch to normal mode
-        current_rag_mode = False
-        return (
-            gr.Button(value="Enable RAG Mode", variant="secondary"),
-            gr.File(visible=False),
-            gr.Textbox(visible=True, value="Normal conversation mode. Click to enable RAG mode.")
-        )
-    else:
-        # Currently in normal mode, check service and switch to RAG mode
-        if not check_rag_service():
-            return (
-                gr.Button(value="Enable RAG Mode", variant="secondary"),
-                gr.File(visible=False),
-                gr.Textbox(visible=True, value="⚠️ RAG service is not available. Please start the RAG service at http://localhost:8001")
-            )
-        current_rag_mode = True
-        return (
-            gr.Button(value="Disable RAG Mode", variant="primary"),
-            gr.File(visible=True),
-            gr.Textbox(visible=True, value="RAG mode enabled. You can upload documents.")
-        )
-
-
-
-
-# Create Gradio app
-system_message = create_system_message()
-if verbose:
-    print("="*80)
-    print("SYSTEM PROMPT:")
-    print("="*80)
-    print(system_message)
-
-
-CSS = """
-h1 { text-align: center; }
-h3 { text-align: center; }
-.contain { display: flex; flex-direction: column; }
-.gradio-container { height: 100vh !important; }
-#component-0 { flex-grow: 1; overflow: auto; }
-#chatbot { flex-grow: 1; overflow: auto; }
-body {
-    min-height: 100vh;
-}
+"""
+FastAPI backend for inf4RAG agentic chatbot.
+- /health  : quick health check
+- /chat    : main endpoint to run RAG + LLM (vLLM or Qwen-Agent)
+Run:
+  conda activate inf4rag_win
+  python app.py
 """
 
+from __future__ import annotations
+import os
+import uvicorn
+import yaml
+import logging
+from typing import List, Optional, Dict, Any
 
-# Global state for RAG mode
-current_rag_mode = False
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+
+from rag_module import RAGStore
+from agentic_workflow import VLLMChatClient, QwenAgentClient, build_messages
 
 
-with gr.Blocks(css=CSS) as app:
-    gr.Markdown(description)
-   
-    # RAG mode toggle
-    with gr.Row():
-        use_rag_button = gr.Button(
-            value="Enable RAG Mode",
-            variant="secondary"
+# -------------------------
+# Load config.yaml
+# -------------------------
+CFG_PATH = os.path.join(os.path.dirname(__file__), "config.yaml")
+with open(CFG_PATH, "r", encoding="utf-8") as f:
+    CFG = yaml.safe_load(f)
+
+LOG_LEVEL = CFG.get("server", {}).get("log_level", "info").upper()
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO))
+log = logging.getLogger("inf4rag")
+
+
+# -------------------------
+# Init RAG
+# -------------------------
+rag_cfg = CFG.get("rag", {})
+RAG_ENABLED_BY_DEFAULT: bool = bool(rag_cfg.get("enabled_by_default", True))
+
+rag_store = RAGStore(
+    docs_dir=rag_cfg.get("docs_dir", "./data/docs"),
+    index_dir=rag_cfg.get("index_dir", "./data/index/faiss"),
+    embedding_model=rag_cfg.get("embedding_model", "sentence-transformers/all-MiniLM-L6-v2"),
+    chunk_size=int(rag_cfg.get("chunk_size", 800)),
+    chunk_overlap=int(rag_cfg.get("chunk_overlap", 150)),
+)
+# Build or load index at startup (safe even if empty)
+rag_store.build_or_load()
+
+
+# -------------------------
+# Init LLM clients
+# -------------------------
+vllm_cfg = CFG.get("vllm", {})
+vllm_client = VLLMChatClient(
+    base_url=vllm_cfg.get("base_url", "http://127.0.0.1:8000/v1"),
+    api_key=vllm_cfg.get("api_key", "ec528"),
+    model=vllm_cfg.get("model", "qwen-4b-instruct"),
+)
+
+qwen_cfg = CFG.get("qwen_agent", {})
+QWEN_ENABLED = bool(qwen_cfg.get("enabled", False))
+qwen_client = None
+if QWEN_ENABLED:
+    try:
+        qwen_client = QwenAgentClient(
+            model=qwen_cfg.get("model", "qwen-max-latest"),
+            dashscope_api_key=qwen_cfg.get("dashscope_api_key", ""),
         )
-   
-    # Upload section - initially hidden
-    file_upload = gr.File(
-        label="Upload RAG Documents (.zip)",
-        file_count="single",
-        file_types=[".zip"],
-        visible=False
-    )
-   
-    upload_status = gr.Textbox(
-        label="Status",
-        value="Normal conversation mode. Click 'Enable RAG Mode' to upload documents.",
-        interactive=False,
-        visible=False
-    )
-   
-    # RAG mode toggle handler
-    use_rag_button.click(
-        fn=on_rag_mode_toggle,
-        inputs=None,
-        outputs=[use_rag_button, file_upload, upload_status],
-        show_progress=False
-    )
-   
-    # File upload handler
-    file_upload.change(
-        fn=lambda file: upload_file_to_rag(file, "default-dataset"),
-        inputs=file_upload,
-        outputs=upload_status
-    )
-   
-    # Chat interface
-    def chat_handler(message, history):
-        global current_rag_mode
-        return generate(message, history, use_rag=current_rag_mode)
-   
-    chatinterface = gr.ChatInterface(
-        fn=chat_handler,
-        examples=examples
-    )
-    chatinterface.chatbot.elem_id = "chatbot"
+        log.info("Qwen-Agent client initialized.")
+    except Exception as e:
+        log.warning("Qwen-Agent disabled: %s", e)
+        qwen_client = None
+        QWEN_ENABLED = False
 
 
-    with gr.Accordion(label="Options", open=False):
-        with gr.Row():
-            model_name_box = gr.Textbox(
-                label="Model Name",
-                placeholder="N/A",
-                value=MODELS["vLLM"].model_name
+# -------------------------
+# FastAPI app & models
+# -------------------------
+app = FastAPI(title="inf4RAG Agentic Backend", version="0.1.0")
+
+
+class ChatRequest(BaseModel):
+    user_input: str = Field(..., description="User message.")
+    history: Optional[List[Dict[str, str]]] = Field(default=None, description="OpenAI-style messages.")
+    use_rag: Optional[bool] = Field(default=None, description="Override RAG switch; None=use default.")
+    provider: str = Field(default="vllm", description="vllm | qwen")
+    temperature: float = 0.2
+    max_tokens: int = 1024
+    top_k: int = 4
+
+
+class ChatResponse(BaseModel):
+    output: str
+    retrieved: Optional[List[str]] = None
+    provider: str = "vllm"
+    model: str = ""
+    used_rag: bool = False
+
+
+@app.get("/health")
+def health() -> Dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.post("/chat", response_model=ChatResponse)
+def chat_endpoint(req: ChatRequest) -> ChatResponse:
+    # Decide whether to use RAG
+    use_rag = RAG_ENABLED_BY_DEFAULT if req.use_rag is None else bool(req.use_rag)
+
+    # Retrieve context if enabled
+    chunks: List[str] = []
+    if use_rag and req.user_input.strip():
+        chunks = rag_store.retrieve(req.user_input, k=max(1, req.top_k))
+
+    # Compose messages
+    system_prompt = (
+        "You are a helpful AI assistant. Use the provided context if relevant. "
+        "Cite the context succinctly when applicable."
+    )
+    messages = build_messages(
+        system_prompt=system_prompt,
+        user_message=req.user_input,
+        history=req.history,
+        context_chunks=chunks if use_rag else None,
+    )
+
+    # Route to provider
+    provider = (req.provider or "vllm").lower()
+
+    if provider == "qwen" and QWEN_ENABLED and qwen_client is not None:
+        try:
+            text = qwen_client.chat(messages)
+            return ChatResponse(
+                output=text,
+                retrieved=chunks if use_rag else None,
+                provider="qwen",
+                model=qwen_cfg.get("model", ""),
+                used_rag=use_rag,
             )
+        except Exception as e:
+            # Fallback to vLLM if qwen fails
+            log.warning("Qwen-Agent failed (%s); falling back to vLLM.", e)
+
+    # Default: vLLM via OpenAI-compatible API
+    text = vllm_client.chat(
+        messages=messages,
+        temperature=req.temperature,
+        max_tokens=req.max_tokens,
+    )
+    return ChatResponse(
+        output=text,
+        retrieved=chunks if use_rag else None,
+        provider="vllm",
+        model=vllm_cfg.get("model", ""),
+        used_rag=use_rag,
+    )
 
 
-            base_url_box = gr.Textbox(
-                label="Request URL",
-                placeholder="https://api.openai.com/v1",
-                value=f"{config.get('base_url', 'https://api.openai.com/v1')}/api_key={config.get('api_key', '')}"
-            )
-
-
-            temperature_slider = gr.Slider(label="Temperature", minimum=0, maximum=1, step=0.1, value=temperature)
-       
-
-
-    def change_temperature(new_temperature):
-        global temperature
-        temperature = new_temperature
-
-
-    temperature_slider.change(fn=change_temperature, inputs=temperature_slider)
-
-
-app.queue().launch(debug=True, share=False)
-
-
-
+if __name__ == "__main__":
+    host = CFG.get("server", {}).get("host", "0.0.0.0")
+    port = int(CFG.get("server", {}).get("port", 7861))
+    uvicorn.run("app:app", host=host, port=port, reload=False)

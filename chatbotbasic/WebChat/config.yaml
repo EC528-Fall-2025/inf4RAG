@@ -1,40 +1,31 @@
+# Backend config for inf4RAG agentic chatbot
 
-verbose: True
+# === vLLM (OpenAI-compatible) ===
+vllm:
+  base_url: "http://199.94.60.224:8000/v1"     # your OpenStack vLLM endpoint
+  api_key: "ec528"                              # whatever you configured in vLLM
+  model: "qwen-4b-instruct"                     # served-model-name if you set one; else the HF id
 
+# === Qwen Agent (optional, best-effort; safe to leave disabled) ===
+qwen_agent:
+  enabled: false
+  model: "qwen-max-latest"
+  dashscope_api_key: ""                         # set if you want to use Qwen Agent
 
-description: "### This is a chatbot interface powered by vLLM"
+# === RAG ===
+rag:
+  enabled_by_default: true
+  docs_dir: "./data/docs"                       # put your txt/pdf/md here (can be empty)
+  chunk_size: 800
+  chunk_overlap: 150
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"  # small & fast
+  index_dir: "./data/index/faiss"              # persisted FAISS index
 
+# === Server ===
+server:
+  host: "0.0.0.0"
+  port: 7861                                    # backend API port (separate from Gradio)
+  log_level: "info"
 
-examples:
-- How are you?
-- Is it possible to build a room temperature superconductor?
-- Should I go to the beach in Santa Cruz tomorrow?
-- Explain the conflict between Zuck and Elon
-- Summarize today's nytimes.com headlines
-
-
-enabled_models:
-- vLLM
-- qwen
-
-
-enabled_browsers:
-- Chrome
-
-
-openstack_ip_port: "199.94.60.39:8000"
-api_key: "ec528"
-
-
-temperature: 0.1
-
-
-max_actions: 5
-
-
-
-qwen:
-  model_name: "qwen-4b"
-  api_key: "YOUR_API_KEY"
 
  

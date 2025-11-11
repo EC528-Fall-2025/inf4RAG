@@ -29,7 +29,7 @@ temperature = config["temperature"]
 max_actions = config["max_actions"]
 
 # RAG Configuration
-RAG_SERVICE_URL = "http://localhost:8001"
+RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://localhost:8001")
 
 llm_tools = Tools()
 

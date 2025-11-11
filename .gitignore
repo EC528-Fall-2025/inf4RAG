@@ -16,6 +16,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Scripts
+aws-cleanup-all.sh
+
 # Dependencies
 node_modules/
 __pycache__/

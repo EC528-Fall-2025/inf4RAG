@@ -19,13 +19,13 @@ cmd="${1:-help}"
 
 case "$cmd" in
   start)
-    docker compose up -d
+    podman compose up -d
     ;;
   stop)
-    docker compose down
+    podman compose down
     ;;
   status)
-    docker compose ps
+    podman compose ps
     ;;
   help|--help|-h)
     usage

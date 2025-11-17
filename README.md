@@ -1,5 +1,12 @@
 # Optimizing Cloud-Based Inference for RAG and Agentic Workloads
 
+## Sprint Demo 4
+
+**Sprint Demo 4**: [Video](https://youtu.be/ww_i0jRqoWs)
+
+**Spring Slide 4**: [Slide](https://docs.google.com/presentation/d/1gTOZAZpYl7pMvKpSyjIa4-UtdyC6LqhwaGmSyOOltd8/edit?slide=id.p#slide=id.p)
+
+
 ## Sprint Demo 3
 
 **Sprint Demo 3**: [Video](https://www.youtube.com/watch?v=B-cUFVQ3fV8)

@@ -1,220 +1,59 @@
+# -*- coding: utf-8 -*-
 import os
-import openai
-import anthropic
-import huggingface_hub
-import tiktoken # Tokenizer for OpenAI GPT models
-import sentencepiece # Tokenizer for LLaMA 2 model
-from openai import OpenAI
+import requests
 
-import time
-
-MAX_TOKENS = 1000  # Max number of tokens that each model should generate
-
-class Model:
+class ChatModel:
     """
-    Common interface for all chat model API providers
+    Minimal wrapper around an OpenAI-compatible /chat/completions endpoint.
     """
-    '''
-    def __init__(self, config):
-        self.config = config
-        self.client = OpenAI(
-            base_url=config.get("base_url", "http://127.0.0.1:8000/v1"),
-            api_key=config.get("api_key", "ec528")
-        )
-        self.model_name = self.client.models.list().data[0].id
-        print(f"Using model: {self.model_name}")
-    '''
-    def __init__(self, config):
-        self.config = config
-        try:
-            self.client = OpenAI(
-                base_url=config.get("base_url", "http://127.0.0.1:8000/v1"),
-                api_key=config.get("api_key", "ec528")
-            )
-            self.model_name = self.client.models.list().data[0].id
-            print(f"Using model: {self.model_name}")
-            self.connected = True
-        except Exception as e:
-            print(f"Warning: Could not connect to vLLM: {e}")
-            print("Using mock responses. Please start vLLM service on OpenStack.")
-            self.model_name = "mock-model"
-            self.connected = False
-            self.client = None
 
-    def _generate_mock_response(self, query):
+    def __init__(self, base_url=None, api_key=None, model=None, timeout=60):
+        self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1")
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY", "EMPTY")
+        self.model = model or os.getenv("OPENAI_MODEL", "Qwen2.5-7B-Instruct")
+        self.timeout = timeout
+
+    def _chat(self, messages, temperature=0.3, max_tokens=1024, stream=False):
         """
-        Generate a mock streaming response when vLLM is not available.
+        Low-level helper: send a /chat/completions request and return the raw JSON.
         """
-        mock_text = f"""This is a mock response. Your question was: "{query}"
+        url = self.base_url.rstrip("/") + "/chat/completions"
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": float(temperature),
+            "max_tokens": int(max_tokens),
+            "stream": bool(stream),
+        }
+        resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.json()
 
-    NOTE: Currently unable to connect to vLLM service on OpenStack.
-
-    To enable real responses:
-    1. Launch an instance on OpenStack
-    2. Mount the 'All-Models' volume
-    3. Start vLLM service with: vllm serve /data/Phi-3-mini-4k-instruct --api-key=ec528
-    4. Ensure the floating IP is accessible
-
-    Check README.md for detailed instructions."""
-        
-        # Simulate streaming by yielding chunks
-        class MockStream:
-            def __init__(self, text):
-                self.text = text
-                self.words = text.split()
-                self.index = 0
-            
-            def __iter__(self):
-                return self
-            
-            def __next__(self):
-                if self.index >= len(self.words):
-                    raise StopIteration
-                
-                word = self.words[self.index]
-                self.index += 1
-                
-                class MockCompletion:
-                    class choices:
-                        class delta:
-                            content = word + " "
-                
-                return MockCompletion()
-        
-        return MockStream(mock_text)
-    
-    '''
-    def generate(self, system_message, new_user_message, history=[], temperature=1):
-        messages = [{"role": "system", "content": system_message}]
-
-        for user_message, assistant_response in history:
-            messages.append({"role": "user", "content": user_message})
-            messages.append({"role": "assistant", "content": assistant_response})
-
-        messages.append({"role": "user", "content": new_user_message})
-
-        stream = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=MAX_TOKENS,
-            stream=True,
-        )
-
-        return stream
-    '''
-
-    def generate(self, system_message, new_user_message, history=[], temperature=1):
-        # If not connected, return mock stream
-        if not self.connected or self.client is None:
-            return self._generate_mock_response(new_user_message)
-        
-        messages = [{"role": "system", "content": system_message}]
-
-        for user_message, assistant_response in history:
-            messages.append({"role": "user", "content": user_message})
-            messages.append({"role": "assistant", "content": assistant_response})
-
-        messages.append({"role": "user", "content": new_user_message})
-
+    def complete(self, system_prompt: str, user_messages, temperature=0.3, max_tokens=1024) -> str:
+        """
+        Non-streaming completion.
+        system_prompt: optional system message text.
+        user_messages: list of {role, content} messages (user/assistant).
+        """
+        msgs = []
+        if system_prompt:
+            msgs.append({"role": "system", "content": system_prompt})
+        msgs.extend(user_messages)
         try:
-            stream = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
+            data = self._chat(
+                msgs,
                 temperature=temperature,
-                max_tokens=MAX_TOKENS,
-                stream=True,
+                max_tokens=max_tokens,
+                stream=False,
             )
-            return stream
+            return data["choices"][0]["message"]["content"]
         except Exception as e:
-            print(f"Error calling vLLM: {e}")
-            return self._generate_mock_response(new_user_message)
+            return f"[Model error] {e}"
 
-    '''
-    def parse_completion(self, completion):
-        # ✅ works with ChatCompletionChunk
-        delta = completion.choices[0].delta
-        if delta.content:
-            return delta.content
-        return None
-    '''
-
-    def parse_completion(self, completion):
-        # ✅ works with ChatCompletionChunk
-        try:
-            delta = completion.choices[0].delta
-            if delta.content:
-                return delta.content
-        except AttributeError:
-            return completion.choices.delta.content
-        return None
-
-class OpenAIModel(Model):
-    """
-    Interface for OpenAI's GPT models
-    """
-    '''
-    def generate(self, system_message, new_user_message, history=[], temperature=1):
-        messages = [{"role": "system", "content": system_message}]
-
-        for user_message, assistant_response in history:
-            if user_message:
-                messages.append({"role": "user", "content": str(user_message)})
-            if assistant_response:
-                messages.append({"role": "assistant", "content": str(assistant_response)})
-
-        messages.append({"role": "user", "content": str(new_user_message)})
-
-        stream = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=MAX_TOKENS,
-            stream=True,
-        )
-
-        return stream
-    
-    def parse_completion(self, completion):
-        delta = completion.choices[0].delta
-        if delta.content:
-            return delta.content
-        return None
-    '''
-    def generate(self, system_message, new_user_message, history=[], temperature=1):
-        # If not connected, return mock stream
-        if not self.connected or self.client is None:
-            return self._generate_mock_response(new_user_message)
-        
-        messages = [{"role": "system", "content": system_message}]
-
-        for user_message, assistant_response in history:
-            if user_message:
-                messages.append({"role": "user", "content": str(user_message)})
-            if assistant_response:
-                messages.append({"role": "assistant", "content": str(assistant_response)})
-
-        messages.append({"role": "user", "content": new_user_message})
-
-        try:
-            stream = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=MAX_TOKENS,
-                stream=True,
-            )
-            return stream
-        except Exception as e:
-            print(f"Error calling vLLM: {e}")
-            return self._generate_mock_response(new_user_message)
-    
-    def parse_completion(self, completion):
-        # ✅ works with ChatCompletionChunk
-        try:
-            delta = completion.choices[0].delta
-            if delta.content:
-                return delta.content
-        except AttributeError:
-            return completion.choices.delta.content
-        return None
+    def generate(self, system_prompt: str, user_messages, temperature=0.3, max_tokens=1024):
+        """
+        Backwards-compatible interface for previous code paths.
+        This simply yields a single full response string (non-streaming).
+        """
+        yield self.complete(system_prompt, user_messages, temperature, max_tokens)

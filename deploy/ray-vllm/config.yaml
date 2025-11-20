@@ -1,0 +1,22 @@
+# Ray Serve + vLLM Configuration File
+
+# Model configuration
+model:
+  path: "/data/Phi-3-mini-4k-instruct"  # Model path, modify according to actual situation
+
+# Deployment configuration
+deployment:
+  num_replicas: 4          # Number of replicas (vLLM instances)
+  gpus_per_replica: 2      # Number of GPUs per replica
+  tensor_parallel_size: 2  # Tensor parallel size within each replica
+
+# Service configuration
+service:
+  host: "0.0.0.0"          # Service listening address
+  port: 8000               # Service port
+
+# Notes:
+# 1. Ensure total GPUs >= num_replicas * gpus_per_replica
+# 2. tensor_parallel_size should equal gpus_per_replica
+# 3. Each replica will load the model once, ensure sufficient memory
+

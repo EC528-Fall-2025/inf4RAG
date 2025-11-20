@@ -1,0 +1,30 @@
+services:
+  rag:
+    build:
+      context: /Users/weianqi/Projects/inf4RAG
+      dockerfile: RAG/Dockerfile
+    container_name: inf4rag-rag
+    environment:
+      - PORT=8001
+      - RAG_PERSIST_DIR=/data
+    volumes:
+      - rag-data:/data
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+  chatbot:
+    build:
+      context: /Users/weianqi/Projects/inf4RAG/chatbotbasic/WebChat
+    container_name: inf4rag-chatbot
+    environment:
+      - RAG_SERVICE_URL=http://rag:8001
+    depends_on:
+      - rag
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+volumes:
+  rag-data:
+

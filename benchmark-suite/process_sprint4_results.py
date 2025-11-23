@@ -18,6 +18,17 @@ STATISTICS_OF_INTEREST = {
     "p99": "P99"
 }
 
+
+def col_letter_to_index(col_letter: str) -> int:
+    """Convert Excel-style column letters (A, Z, AA, AB, ...) to zero-based index."""
+    col_letter = col_letter.upper()
+    index = 0
+    for char in col_letter:
+        if not ('A' <= char <= 'Z'):
+            raise ValueError(f"Invalid column letter: {col_letter}")
+        index = index * 26 + (ord(char) - ord('A') + 1)
+    return index - 1
+
 # Column headers from the CSV for each experiment set
 COLUMN_MAP = {
     "tensor-parallelism": {
@@ -31,6 +42,11 @@ COLUMN_MAP = {
     "pd-disaggregation": {
         "steady": ["O", "P", "Q", "R", "S"],
         "flood": ["T"]
+    },
+    "pd-disaggregation-nixl": {
+        # NIXL-based PD Disaggregation columns
+        "steady": ["AA", "AB", "AC", "AD", "AE"],
+        "flood": ["AF"]
     },
     "data-parallelism": {
         "steady": ["U", "V", "W", "X", "Y"],
@@ -149,7 +165,7 @@ def process_results(results_dir, sheet_path, output_path):
         if is_flood:
             # Handle flood test
             col_letter = COLUMN_MAP[experiment_set]["flood"][0]
-            col_index = ord(col_letter) - ord('A')
+            col_index = col_letter_to_index(col_letter)
             click.secho(f"   Type: Flood | Target Column: {col_letter}", fg="blue")
             
             for metric, stats in results.items():
@@ -185,7 +201,7 @@ def process_results(results_dir, sheet_path, output_path):
                 
                 target_col_letter = None
                 for col_letter in steady_cols:
-                    col_idx = ord(col_letter) - ord('A')
+                    col_idx = col_letter_to_index(col_letter)
                     csv_value = tps_row[col_idx]
                     # Try to compare as numbers (handle both int and float representations)
                     try:
@@ -202,7 +218,7 @@ def process_results(results_dir, sheet_path, output_path):
                     click.secho(f"   [!] Could not find a column for request rate {rate} in the sheet. Skipping.", fg="yellow")
                     continue
 
-                col_index = ord(target_col_letter) - ord('A')
+                col_index = col_letter_to_index(target_col_letter)
                 click.secho(f"   Type: Steady | Rate: {rate} req/s | Target Column: {target_col_letter}", fg="blue")
 
                 for metric, stats in results.items():

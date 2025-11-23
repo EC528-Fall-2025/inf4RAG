@@ -249,7 +249,7 @@ async def get_models():
     return {
         "object": "list",
         "data": [
-            {"id": "Qwen3-4B-Instruct-2507", "object": "model"}
+            {"id": "/mnt/models/Qwen3-4B-Instruct-2507", "object": "model"}
         ]
     }
 

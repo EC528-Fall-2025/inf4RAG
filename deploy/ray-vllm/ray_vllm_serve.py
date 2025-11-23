@@ -180,13 +180,14 @@ def auto_configure_gpus(
     
     if preferred_gpus_per_replica is None:
         # Auto-calculate optimal GPUs per replica
-        # Strategy: Prefer 2 GPUs per replica for better performance
-        # If total GPUs is odd or small, adjust accordingly
-        if total_gpus >= 8:
+        # Strategy: For 2 GPU node, use 1 GPU per replica (2 replicas)
+        # For more GPUs, prefer 2 GPUs per replica for better performance
+        if total_gpus == 2:
+            # 2 GPU node: 2 replicas × 1 GPU each (data parallelism)
+            preferred_gpus_per_replica = 1
+        elif total_gpus >= 8:
             preferred_gpus_per_replica = 2
         elif total_gpus >= 4:
-            preferred_gpus_per_replica = 2
-        elif total_gpus >= 2:
             preferred_gpus_per_replica = 2
         else:
             preferred_gpus_per_replica = 1
@@ -236,7 +237,6 @@ def create_deployment(
     import ray
     
     # Initialize Ray (single node mode)
-    # For multi-node, need to start Ray cluster first
     total_gpus = num_replicas * gpus_per_replica
     ray.init(
         num_gpus=total_gpus,
@@ -274,42 +274,57 @@ def create_deployment(
 
 
 if __name__ == "__main__":
+    # Load configuration from config.yaml
+    try:
+        from load_config import load_config
+        config = load_config()
+    except ImportError:
+        # Fallback if load_config not available
+        config = {
+            'model_path': 'gpt2',
+            'num_replicas': None,
+            'gpus_per_replica': None,
+            'tensor_parallel_size': None,
+            'host': '0.0.0.0',
+            'port': 8000
+        }
+    
     parser = argparse.ArgumentParser(description="Ray Serve + vLLM deployment script")
     parser.add_argument(
         "--model-path",
         type=str,
-        required=True,
-        help="Model path (e.g., /data/Phi-3-mini-4k-instruct)"
+        default=None,
+        help=f"Model path: HuggingFace model name (e.g., gpt2) or local path (default: from config.yaml or {config['model_path']})"
     )
     parser.add_argument(
         "--num-replicas",
         type=int,
         default=None,
-        help="Number of replicas (vLLM instances). If not specified, auto-detect based on available GPUs"
+        help="Number of replicas (vLLM instances). If not specified, use config.yaml or auto-detect"
     )
     parser.add_argument(
         "--gpus-per-replica",
         type=int,
         default=None,
-        help="Number of GPUs per replica. If not specified, auto-calculate based on available GPUs"
+        help="Number of GPUs per replica. If not specified, use config.yaml or auto-calculate"
     )
     parser.add_argument(
         "--tensor-parallel-size",
         type=int,
         default=None,
-        help="Tensor parallel size within each replica. If not specified, equals gpus-per-replica"
+        help="Tensor parallel size within each replica. If not specified, use config.yaml or equals gpus-per-replica"
     )
     parser.add_argument(
         "--host",
         type=str,
-        default="0.0.0.0",
-        help="Service listening address (default: 0.0.0.0)"
+        default=None,
+        help=f"Service listening address (default: from config.yaml or {config['host']})"
     )
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Service port (default: 8000)"
+        default=None,
+        help=f"Service port (default: from config.yaml or {config['port']})"
     )
     parser.add_argument(
         "--auto-detect",
@@ -319,8 +334,26 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
+    # Use config.yaml values if command line arguments not provided
+    model_path = args.model_path if args.model_path is not None else config['model_path']
+    num_replicas = args.num_replicas if args.num_replicas is not None else config['num_replicas']
+    gpus_per_replica = args.gpus_per_replica if args.gpus_per_replica is not None else config['gpus_per_replica']
+    tensor_parallel_size = args.tensor_parallel_size if args.tensor_parallel_size is not None else config['tensor_parallel_size']
+    host = args.host if args.host is not None else config['host']
+    port = args.port if args.port is not None else config['port']
+    
+    print(f"Configuration loaded from config.yaml:")
+    print(f"  Model path: {model_path}")
+    print(f"  Host: {host}")
+    print(f"  Port: {port}")
+    if num_replicas is not None:
+        print(f"  Num replicas: {num_replicas}")
+    if gpus_per_replica is not None:
+        print(f"  GPUs per replica: {gpus_per_replica}")
+    print("")
+    
     # Auto-detect GPUs if needed
-    if args.num_replicas is None or args.gpus_per_replica is None or args.auto_detect:
+    if num_replicas is None or gpus_per_replica is None or args.auto_detect:
         print("=" * 60)
         print("Auto-detecting GPU configuration...")
         print("=" * 60)
@@ -332,19 +365,18 @@ if __name__ == "__main__":
             exit(1)
         
         # Auto-configure
-        num_replicas, gpus_per_replica = auto_configure_gpus(
+        auto_num_replicas, auto_gpus_per_replica = auto_configure_gpus(
             total_gpus=available_gpus,
-            preferred_gpus_per_replica=args.gpus_per_replica
+            preferred_gpus_per_replica=gpus_per_replica
         )
         
-        # Override with user-specified values if provided
-        if args.num_replicas is not None:
-            num_replicas = args.num_replicas
-        if args.gpus_per_replica is not None:
-            gpus_per_replica = args.gpus_per_replica
+        # Use config.yaml or auto-detected values
+        if num_replicas is None:
+            num_replicas = auto_num_replicas
+        if gpus_per_replica is None:
+            gpus_per_replica = auto_gpus_per_replica
         
         # Set tensor_parallel_size if not specified
-        tensor_parallel_size = args.tensor_parallel_size
         if tensor_parallel_size is None:
             tensor_parallel_size = gpus_per_replica
         
@@ -356,10 +388,13 @@ if __name__ == "__main__":
         
         print("=" * 60)
     else:
-        # Use user-specified values
-        num_replicas = args.num_replicas
-        gpus_per_replica = args.gpus_per_replica
-        tensor_parallel_size = args.tensor_parallel_size if args.tensor_parallel_size is not None else gpus_per_replica
+        # Use config.yaml or specified values
+        if num_replicas is None:
+            num_replicas = 2  # Default for 2 GPU node
+        if gpus_per_replica is None:
+            gpus_per_replica = 1  # Default for 2 GPU node
+        if tensor_parallel_size is None:
+            tensor_parallel_size = gpus_per_replica
         
         # Validate against available GPUs
         available_gpus = detect_available_gpus()
@@ -370,12 +405,12 @@ if __name__ == "__main__":
     
     # Create and start deployment
     create_deployment(
-        model_path=args.model_path,
+        model_path=model_path,
         num_replicas=num_replicas,
         gpus_per_replica=gpus_per_replica,
         tensor_parallel_size=tensor_parallel_size,
-        host=args.host,
-        port=args.port
+        host=host,
+        port=port
     )
     
     # Keep running

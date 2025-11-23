@@ -246,8 +246,12 @@ async def handle_chat_completions(request: Request):
 
 @app.get("/v1/models")
 async def get_models():
-    return {"object": "list", "data": [{"id": "qwen", "object": "model"}]}
-
+    return {
+        "object": "list",
+        "data": [
+            {"id": "Qwen3-4B-Instruct-2507", "object": "model"}
+        ]
+    }
 
 @app.get("/healthcheck")
 async def healthcheck():

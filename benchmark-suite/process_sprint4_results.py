@@ -48,6 +48,11 @@ COLUMN_MAP = {
         "steady": ["AA", "AB", "AC", "AD", "AE"],
         "flood": ["AF"]
     },
+    "pd-disaggregation-p2p": {
+        # P2P NCCL-based PD Disaggregation columns
+        "steady": ["AG", "AH", "AI", "AJ", "AK"],
+        "flood": ["AL"]
+    },
     "data-parallelism": {
         "steady": ["U", "V", "W", "X", "Y"],
         "flood": ["Z"]

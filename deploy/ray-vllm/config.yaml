@@ -4,8 +4,8 @@
 # ============================================================
 
 # Floating IPs (REQUIRED - Fill these in after creating instances)
-FLOATING_IP_1: "199.94.61.1"  # Head node Floating IP
-FLOATING_IP_2: "199.94.61.170"   # Worker node Floating IP
+FLOATING_IP_1: "199.94.61.108"  # Head node Floating IP
+FLOATING_IP_2: "199.94.61.249"   # Worker node Floating IP
 
 # SSH Configuration (REQUIRED)
 SSH_KEY_PATH: "~/.ssh/id_rsa"      # Path to your SSH private key (not .pub)
@@ -63,9 +63,9 @@ vllm:
 # Deployment options
 deployment:
   # Whether to skip steps (useful for re-running after partial completion)
-  skip_driver_install: true        # Skip NVIDIA driver installation
-  skip_ray_install: true          # Skip Ray installation
-  skip_vllm_install: true         # Skip vLLM installation
+  skip_driver_install: false        # Skip NVIDIA driver installation
+  skip_ray_install: false          # Skip Ray installation
+  skip_vllm_install: false         # Skip vLLM installation
   skip_ray_cluster: false          # Skip Ray cluster setup
   skip_vllm_start: false           # Skip vLLM service start
 

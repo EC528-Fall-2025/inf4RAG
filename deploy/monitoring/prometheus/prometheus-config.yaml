@@ -7,3 +7,13 @@ scrape_configs:
     static_configs:
       - targets:
           - "host.docker.internal:8000"
+  
+  - job_name: rag
+    static_configs:
+      - targets:
+          - "rag:8001"
+  
+  - job_name: chatbot
+    static_configs:
+      - targets:
+          - "chatbot:7860"

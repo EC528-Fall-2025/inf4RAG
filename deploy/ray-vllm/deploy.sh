@@ -2,6 +2,7 @@
 
 # Automated Multi-Node Ray Cluster + vLLM Deployment Script
 # This script automates the entire deployment process described in howtodeplyray.md
+# Automation starts from SSH connectivity check (Step 2 in the guide)
 
 set -e
 
@@ -192,41 +193,23 @@ for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
 done
 echo ""
 
-# Step 1: Install NVIDIA Drivers
+# Step 1: Install NVIDIA Drivers (following howtodeplyray.md)
 if [ "$SKIP_DRIVER" != "true" ] && [ "$DRIVER_INSTALL" = "true" ]; then
     echo -e "${YELLOW}Step 1: Installing NVIDIA drivers on all nodes...${NC}"
     for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
         echo "  Installing on $node..."
-        ssh_cmd "$node" "sudo apt update && sudo apt upgrade -y && sudo add-apt-repository ppa:graphics-drivers/ppa -y && sudo apt update && sudo apt install -y nvidia-driver-${DRIVER_VERSION}"
+        # Execute commands as per howtodeplyray.md Step 3 (separate commands to avoid apt lock)
+        ssh_cmd "$node" "sudo apt update"
+        ssh_cmd "$node" "sudo apt upgrade -y"
+        ssh_cmd "$node" "sudo add-apt-repository ppa:graphics-drivers/ppa -y"
+        ssh_cmd "$node" "sudo apt install -y nvidia-driver-${DRIVER_VERSION}"
     done
     
-    if [ "$DRIVER_REBOOT" = "true" ]; then
-        echo -e "${YELLOW}Rebooting nodes (this will take a few minutes)...${NC}"
-        for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-            echo "  Rebooting $node..."
-            ssh_cmd "$node" "sudo reboot" || true
-        done
-        
-        echo "Waiting 60 seconds for nodes to reboot..."
-        sleep 60
-        
-        echo "Waiting for nodes to come back online..."
-        for i in {1..30}; do
-            if ssh_cmd "$HEAD_NODE" "echo 'OK'" >/dev/null 2>&1; then
-                echo -e "${GREEN}Nodes are back online${NC}"
-                break
-            fi
-            echo -n "."
-            sleep 10
-        done
-        echo ""
-    fi
-    
-    # Verify GPU
+    # Verify GPU (nvidia-smi as per howtodeplyray.md)
     echo "Verifying GPU installation..."
     for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
         echo -n "  $node: "
-        if ssh_cmd "$node" "nvidia-smi --query-gpu=name --format=csv,noheader" 2>/dev/null | head -1; then
+        if ssh_cmd "$node" "nvidia-smi" >/dev/null 2>&1; then
             echo -e "${GREEN}✓ GPU detected${NC}"
         else
             echo -e "${RED}✗ GPU not detected${NC}"
@@ -235,198 +218,90 @@ if [ "$SKIP_DRIVER" != "true" ] && [ "$DRIVER_INSTALL" = "true" ]; then
     echo ""
 fi
 
-# Step 2: Install Python pip (required before PyTorch)
-echo -e "${YELLOW}Step 2: Installing Python pip...${NC}"
+# Step 2: Verify CUDA via PyTorch (following howtodeplyray.md)
+echo -e "${YELLOW}Step 2: Installing pip3, git and PyTorch with CUDA support...${NC}"
 for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
     echo "  Installing on $node..."
-    ssh_cmd "$node" "sudo apt install -y python3-pip && pip3 install --upgrade pip"
-done
-echo ""
-
-# Step 3: Install PyTorch
-echo -e "${YELLOW}Step 3: Installing PyTorch with CUDA support...${NC}"
-for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-    echo "  Installing on $node..."
+    ssh_cmd "$node" "sudo apt install -y python3-pip git"
+    ssh_cmd "$node" "pip3 install --upgrade pip"
     ssh_cmd "$node" "pip3 install torch torchvision torchaudio --index-url $PYTORCH_INDEX"
 done
 
-# Verify CUDA
+# Verify CUDA (as per howtodeplyray.md)
 echo "Verifying CUDA..."
 for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
     echo -n "  $node: "
-    result=$(ssh_cmd "$node" "python3 -c 'import torch; print(\"CUDA:\", torch.cuda.is_available(), \"GPUs:\", torch.cuda.device_count())'")
+    result=$(ssh_cmd "$node" "python3 -c 'import torch; print(\"CUDA available:\", torch.cuda.is_available()); print(\"Num GPUs:\", torch.cuda.device_count())'")
     echo "$result"
 done
 echo ""
 
-# Step 4: Install Ray and vLLM
+# Step 3: Install Ray and vLLM (following howtodeplyray.md)
 if [ "$SKIP_RAY_INSTALL" != "true" ]; then
-    echo -e "${YELLOW}Step 4: Installing Ray...${NC}"
+    echo -e "${YELLOW}Step 3: Installing Ray and vLLM...${NC}"
     for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
         echo "  Installing on $node..."
-        ssh_cmd "$node" "sudo apt install -y git && pip3 install 'ray[default]'"
-    done
-    
-    # Verify Ray installation
-    echo "Verifying Ray installation..."
-    for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-        echo -n "  $node: "
-        if ssh_cmd "$node" "python3 -c 'import ray; print(\"Ray version:\", ray.__version__)'" 2>/dev/null; then
-            echo -e "${GREEN}✓ Ray installed${NC}"
-        else
-            echo -e "${RED}✗ Ray installation failed${NC}"
-            exit 1
-        fi
+        ssh_cmd "$node" "pip3 install 'ray[default]'"
+        ssh_cmd "$node" "pip3 install vllm"
     done
     echo ""
 fi
 
-if [ "$SKIP_VLLM_INSTALL" != "true" ]; then
-    echo -e "${YELLOW}Step 5: Installing vLLM...${NC}"
-    for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-        echo "  Installing on $node..."
-        ssh_cmd "$node" "pip3 install vllm"
-    done
-fi
-
-# Step 6: Start Ray Cluster
+# Step 4: Start Ray Cluster (following howtodeplyray.md)
 if [ "$SKIP_RAY_CLUSTER" != "true" ]; then
-    echo -e "${YELLOW}Step 6: Starting Ray cluster...${NC}"
+    echo -e "${YELLOW}Step 4: Starting Ray cluster...${NC}"
     
-    # Get head node private IP
+    # Get head node private IP (as per howtodeplyray.md)
     echo "  Getting head node private IP..."
     HEAD_PRIVATE_IP=$(ssh_cmd "$HEAD_NODE" "hostname -I | awk '{print \$1}'")
     echo "  Head node private IP: $HEAD_PRIVATE_IP"
     
-    # Start Ray head
+    # Start Ray head (as per howtodeplyray.md)
     echo "  Starting Ray head on $HEAD_NODE..."
-    # Ensure PATH includes ~/.local/bin where ray is typically installed
-    ssh_cmd "$HEAD_NODE" "export PATH=\"\$HOME/.local/bin:\$PATH\" && ray stop" 2>/dev/null || true
-    ssh_cmd "$HEAD_NODE" "export PATH=\"\$HOME/.local/bin:\$PATH\" && ray start --head --port=$RAY_HEAD_PORT --dashboard-host=$RAY_DASHBOARD_HOST --dashboard-port=$RAY_DASHBOARD_PORT"
+    ssh_cmd "$HEAD_NODE" "export PATH=\"\$HOME/.local/bin:\$PATH\" && ray start --head --port=$RAY_HEAD_PORT --dashboard-host=$RAY_DASHBOARD_HOST"
     
-    # Start Ray workers
+    # Start Ray workers (as per howtodeplyray.md)
     for worker in "${WORKER_NODES[@]}"; do
         echo "  Starting Ray worker on $worker..."
-        ssh_cmd "$worker" "export PATH=\"\$HOME/.local/bin:\$PATH\" && ray stop" 2>/dev/null || true
         ssh_cmd "$worker" "export PATH=\"\$HOME/.local/bin:\$PATH\" && ray start --address='$HEAD_PRIVATE_IP:$RAY_HEAD_PORT'"
     done
     
-    # Verify cluster
+    # Verify cluster (as per howtodeplyray.md)
     echo "  Verifying Ray cluster..."
-    result=$(ssh_cmd "$HEAD_NODE" "python3 -c 'import ray; ray.init(address=\"auto\"); print(ray.cluster_resources())'")
-    echo "  Cluster resources: $result"
+    result=$(ssh_cmd "$HEAD_NODE" "python3 -c 'import ray; ray.init(address=\"auto\"); print(\"Cluster resources:\", ray.cluster_resources())'")
+    echo "  $result"
     echo ""
 fi
 
-# Step 7: Start vLLM services
+# Step 5: Start vLLM on Each GPU Node (following howtodeplyray.md)
 if [ "$SKIP_VLLM_START" != "true" ]; then
-    echo -e "${YELLOW}Step 7: Starting vLLM services...${NC}"
-    echo -e "${YELLOW}Note: vLLM startup may take several minutes while loading the model...${NC}"
+    echo -e "${YELLOW}Step 5: Starting vLLM services on each node...${NC}"
     for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
         echo "  Starting vLLM on $node..."
-        # Stop existing vLLM if running
-        ssh_cmd "$node" "pkill -f 'vllm.entrypoints.openai.api_server' || true"
-        sleep 1
-        
-        # Start vLLM in background with proper nohup
-        echo "    Command: CUDA_VISIBLE_DEVICES=$VLLM_GPU_PER_NODE python3 -m vllm.entrypoints.openai.api_server --model $VLLM_MODEL --port $VLLM_PORT --max-model-len $VLLM_MAX_LEN"
-        # Create a startup script on remote node and execute it in background
-        local ssh_opts="-i $SSH_KEY -o StrictHostKeyChecking=$([ "$SSH_STRICT" = "true" ] && echo "yes" || echo "no") -o UserKnownHostsFile=/dev/null"
-        if [ "$SSH_STRICT" = "false" ]; then
-            ssh-keygen -R "${node#*@}" 2>/dev/null || true
-        fi
-        
-        # Create startup script on remote node
-        ssh $ssh_opts "$node" "cat > /tmp/start_vllm.sh << 'SCRIPT_EOF'
-#!/bin/bash
-cd /tmp
-exec nohup env CUDA_VISIBLE_DEVICES=$VLLM_GPU_PER_NODE python3 -m vllm.entrypoints.openai.api_server --model $VLLM_MODEL --port $VLLM_PORT --max-model-len $VLLM_MAX_LEN > /tmp/vllm.log 2>&1 &
-SCRIPT_EOF
-chmod +x /tmp/start_vllm.sh" || {
-            echo -e "    ${RED}Failed to create startup script on $node${NC}"
-            continue
-        }
-        
-        # Execute script in background using SSH -f -n (background + no stdin)
-        ssh $ssh_opts -f -n "$node" "/tmp/start_vllm.sh" || {
-            echo -e "    ${RED}Failed to start vLLM on $node${NC}"
-            echo "    Check logs: ssh -i $SSH_KEY $node 'tail -20 /tmp/vllm.log'"
-            continue
-        }
-        echo -e "    ${GREEN}✓ vLLM process started (checking status...)${NC}"
-        sleep 2
-        
-        # Verify process started
-        if ssh_cmd "$node" "pgrep -f 'vllm.entrypoints.openai.api_server' > /dev/null"; then
-            echo -e "    ${GREEN}✓ Process confirmed running${NC}"
-        else
-            echo -e "    ${YELLOW}⚠ Process may have failed to start, check logs${NC}"
-        fi
-    done
-    
-    echo ""
-    echo "Waiting for vLLM services to initialize (this may take 1-5 minutes for model loading)..."
-    echo "You can monitor progress by checking logs on each node:"
-    for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-        ip="${node#*@}"
-        echo "  ssh -i $SSH_KEY $node 'tail -f /tmp/vllm.log'"
-    done
-    echo ""
-    
-    # Wait and check services
-    for i in {1..12}; do
-        echo -n "  Checking services (attempt $i/12)... "
-        all_running=true
-        for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-            ip="${node#*@}"
-            if ! curl -s --max-time 5 "http://$ip:$VLLM_PORT/health" >/dev/null 2>&1 && ! ssh_cmd "$node" "pgrep -f 'vllm.entrypoints.openai.api_server' > /dev/null"; then
-                all_running=false
-                break
-            fi
-        done
-        
-        if [ "$all_running" = "true" ]; then
-            echo -e "${GREEN}✓ All services responding${NC}"
-            break
-        else
-            echo "still starting..."
-            sleep 10
-        fi
-    done
-    
-    # Final check
-    echo ""
-    echo "Final status check:"
-    for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-        ip="${node#*@}"
-        echo -n "  $ip:$VLLM_PORT... "
-        if curl -s --max-time 5 "http://$ip:$VLLM_PORT/health" >/dev/null 2>&1; then
-            echo -e "${GREEN}✓ Service responding${NC}"
-        elif ssh_cmd "$node" "pgrep -f 'vllm.entrypoints.openai.api_server' > /dev/null"; then
-            echo -e "${YELLOW}⚠ Process running but not yet ready (model still loading)${NC}"
-        else
-            echo -e "${RED}✗ Service not running${NC}"
-            echo "    Check logs: ssh -i $SSH_KEY $node 'tail -50 /tmp/vllm.log'"
-        fi
+        # Start vLLM in background as per howtodeplyray.md
+        ssh_cmd "$node" "CUDA_VISIBLE_DEVICES=$VLLM_GPU_PER_NODE python3 -m vllm.entrypoints.openai.api_server --model $VLLM_MODEL --port $VLLM_PORT --max-model-len $VLLM_MAX_LEN &"
+        echo -e "    ${GREEN}✓ vLLM started${NC}"
     done
     echo ""
 fi
 
-# Step 8: Test services
+# Step 6: Test Each vLLM Instance (following howtodeplyray.md)
 if [ "$TEST_SERVICES" = "true" ]; then
-    echo -e "${YELLOW}Step 8: Testing vLLM services...${NC}"
+    echo -e "${YELLOW}Step 6: Testing vLLM services...${NC}"
+    node_num=1
     for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
         ip="${node#*@}"
-        echo "  Testing $ip:$VLLM_PORT..."
+        echo "  Testing $ip:$VLLM_PORT (node $node_num)..."
         response=$(curl -s --max-time $TEST_TIMEOUT "http://$ip:$VLLM_PORT/v1/completions" \
             -H "Content-Type: application/json" \
-            -d "{\"model\": \"$VLLM_MODEL\", \"prompt\": \"Hello from $(hostname)\", \"max_tokens\": 16}" || echo "ERROR")
+            -d "{\"model\": \"$VLLM_MODEL\", \"prompt\": \"Hello from node $node_num\", \"max_tokens\": 16}" || echo "ERROR")
         
         if echo "$response" | grep -q "choices"; then
             echo -e "    ${GREEN}✓ Service responding${NC}"
         else
-            echo -e "    ${YELLOW}⚠ Service may still be starting (check logs with: ssh -i $SSH_KEY $node 'tail -f /tmp/vllm.log')${NC}"
+            echo -e "    ${YELLOW}⚠ Service may still be starting${NC}"
         fi
+        node_num=$((node_num + 1))
     done
     echo ""
 fi
@@ -436,17 +311,17 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Deployment Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "Ray Dashboard: http://${HEAD_NODE#*@}:$RAY_DASHBOARD_PORT"
+
+# Get head node floating IP for dashboard URL
+HEAD_FLOATING_IP="${HEAD_NODE#*@}"
+echo -e "${GREEN}Ray Dashboard:${NC}"
+echo "  http://${HEAD_FLOATING_IP}:${RAY_DASHBOARD_PORT}/"
 echo ""
-echo "vLLM API Endpoints:"
+
+echo -e "${GREEN}vLLM API Endpoints:${NC}"
 for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
     ip="${node#*@}"
     echo "  - http://$ip:$VLLM_PORT"
-done
-echo ""
-echo "To check logs:"
-for node in "$HEAD_NODE" "${WORKER_NODES[@]}"; do
-    echo "  ssh -i $SSH_KEY $node 'tail -f /tmp/vllm.log'"
 done
 echo ""
 

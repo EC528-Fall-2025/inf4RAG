@@ -54,9 +54,7 @@ Ubuntu images do NOT include GPU drivers. Install manually.
 sudo apt update
 sudo apt upgrade -y
 sudo add-apt-repository ppa:graphics-drivers/ppa -y
-sudo apt update
 sudo apt install -y nvidia-driver-525
-sudo reboot
 ```
 
 Verify GPU:
@@ -74,6 +72,8 @@ Expected: shows A100 GPU.
 Install PyTorch GPU build:
 
 ```bash
+sudo apt install -y python3-pip git
+pip3 install --upgrade pip
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 ```
 
@@ -99,8 +99,6 @@ Num GPUs: 1
 # 5. Install Ray and vLLM on Each Node
 
 ```bash
-sudo apt install -y python3-pip git
-pip3 install --upgrade pip
 pip3 install "ray[default]"
 pip3 install vllm
 ```
@@ -117,11 +115,12 @@ Find private IP:
 hostname -I
 ```
 
-Example: `192.168.0.228`
+Example: `192.168.0.244` the private IP
 
 Start Ray head:
 
 ```bash
+export PATH="$HOME/.local/bin:$PATH"
 ray start --head --port=6379 --dashboard-host=0.0.0.0
 ```
 
@@ -132,7 +131,8 @@ ray start --head --port=6379 --dashboard-host=0.0.0.0
 Connect worker to head:
 
 ```bash
-ray start --address='192.168.0.228:6379'
+export PATH="$HOME/.local/bin:$PATH"
+ray start --address='private IP:6379' # private IP got in 6.1
 ```
 
 ---

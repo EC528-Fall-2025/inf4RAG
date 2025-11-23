@@ -244,6 +244,10 @@ async def handle_completions(request: Request):
 async def handle_chat_completions(request: Request):
     return await _handle_completions("/chat/completions", request)
 
+@app.get("/v1/models")
+async def get_models():
+    return {"object": "list", "data": [{"id": "qwen", "object": "model"}]}
+
 
 @app.get("/healthcheck")
 async def healthcheck():

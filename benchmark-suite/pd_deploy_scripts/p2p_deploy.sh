@@ -21,15 +21,15 @@
 # =============================================================================
 
 # Configuration - can be overridden via environment variables
-MODEL=${MODEL:-meta-llama/Llama-3.1-8B-Instruct}
+MODEL=${MODEL:-/mnt/models/Qwen3-4B-Instruct-2507}
 TIMEOUT_SECONDS=${TIMEOUT_SECONDS:-1200}
 PROXY_PORT=${PROXY_PORT:-30001}
 
-# Default 1P3D configuration (1 Prefill + 3 Decode)
+# Default 1P1D configuration (1 Prefill + 1 Decode on 2 GPUs)
 PREFILL_GPUS=${PREFILL_GPUS:-0}
-DECODE_GPUS=${DECODE_GPUS:-1,2,3}
+DECODE_GPUS=${DECODE_GPUS:-1}
 PREFILL_PORTS=${PREFILL_PORTS:-20003}
-DECODE_PORTS=${DECODE_PORTS:-20005,20007,20009}
+DECODE_PORTS=${DECODE_PORTS:-20005}
 
 echo "Warning: P2P NCCL disaggregated prefill XpYd support for vLLM v1 is experimental and subject to change."
 echo ""
@@ -68,8 +68,6 @@ check_hf_token() {
     fi
     echo "HF_TOKEN is set and valid."
 }
-
-check_num_gpus() {
     # Check if the number of GPUs are >=2 via nvidia-smi
     num_gpus=$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)
     if [ "$num_gpus" -lt 2 ]; then
@@ -124,7 +122,6 @@ wait_for_server() {
 
 main() {
     check_required_files
-    check_hf_token
     check_num_gpus
     ensure_python_library_installed pandas
     ensure_python_library_installed datasets
@@ -166,18 +163,20 @@ main() {
         local kv_port=$((21001 + i))
 
         echo "  Prefill server $((i+1)): GPU $gpu_id, Port $port, KV Port $kv_port"
-        CUDA_VISIBLE_DEVICES=$gpu_id vllm serve $MODEL \
+        CUDA_VISIBLE_DEVICES=$gpu_id \
+        PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+        vllm serve $MODEL \
         --enforce-eager \
         --host 0.0.0.0 \
         --port $port \
         --tensor-parallel-size 1 \
         --seed 1024 \
         --dtype float16 \
-        --max-model-len 10000 \
+        --max-model-len 2048 \
         --max-num-batched-tokens 10000 \
         --max-num-seqs 256 \
         --trust-remote-code \
-        --gpu-memory-utilization 0.9 \
+        --gpu-memory-utilization 0.90 \
         --kv-transfer-config \
         "{\"kv_connector\":\"P2pNcclConnector\",\"kv_role\":\"kv_producer\",\"kv_buffer_size\":\"1e1\",\"kv_port\":\"$kv_port\",\"kv_connector_extra_config\":{\"proxy_ip\":\"0.0.0.0\",\"proxy_port\":\"$PROXY_PORT\",\"http_port\":\"$port\",\"send_type\":\"PUT_ASYNC\",\"nccl_num_channels\":\"16\"}}" > prefill$((i+1)).log 2>&1 &
         PIDS+=($!)
@@ -194,18 +193,20 @@ main() {
         local kv_port=$((22001 + i))
 
         echo "  Decode server $((i+1)): GPU $gpu_id, Port $port, KV Port $kv_port"
-        CUDA_VISIBLE_DEVICES=$gpu_id vllm serve $MODEL \
+        CUDA_VISIBLE_DEVICES=$gpu_id \
+        PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+        vllm serve $MODEL \
         --enforce-eager \
         --host 0.0.0.0 \
         --port $port \
         --tensor-parallel-size 1 \
         --seed 1024 \
         --dtype float16 \
-        --max-model-len 10000 \
+        --max-model-len 2048 \
         --max-num-batched-tokens 10000 \
         --max-num-seqs 256 \
         --trust-remote-code \
-        --gpu-memory-utilization 0.7 \
+        --gpu-memory-utilization 0.90 \
         --kv-transfer-config \
         "{\"kv_connector\":\"P2pNcclConnector\",\"kv_role\":\"kv_consumer\",\"kv_buffer_size\":\"8e9\",\"kv_port\":\"$kv_port\",\"kv_connector_extra_config\":{\"proxy_ip\":\"0.0.0.0\",\"proxy_port\":\"$PROXY_PORT\",\"http_port\":\"$port\",\"send_type\":\"PUT_ASYNC\",\"nccl_num_channels\":\"16\"}}" > decode$((i+1)).log 2>&1 &
         PIDS+=($!)

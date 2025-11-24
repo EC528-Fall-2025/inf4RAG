@@ -1,22 +1,75 @@
-# Ray Serve + vLLM Configuration File
+# Ray Cluster + vLLM Multi-Node Deployment Configuration
+# ============================================================
+# USER CONFIGURATION - Fill in these values after creating OpenStack instances
+# ============================================================
 
-# Model configuration
-model:
-  path: "/data/Phi-3-mini-4k-instruct"  # Model path, modify according to actual situation
+# Floating IPs (REQUIRED - Fill these in after creating instances)
+FLOATING_IP_1: "199.94.61.108"  # Head node Floating IP
+FLOATING_IP_2: "199.94.61.249"   # Worker node Floating IP
 
-# Deployment configuration
+# SSH Configuration (REQUIRED)
+SSH_KEY_PATH: "~/.ssh/id_rsa"      # Path to your SSH private key (not .pub)
+
+# Model Configuration (OPTIONAL - defaults shown)
+VLLM_MODEL: "gpt2"                 # HuggingFace model name or local path
+
+# ============================================================
+# ADVANCED CONFIGURATION - Modify only if needed
+# ============================================================
+
+# Node configuration
+# Replace <FLOATING_IP_1> and <FLOATING_IP_2> with values from above
+nodes:
+  # Head node (Ray head + vLLM server)
+  - name: "ray-node-1"
+    floating_ip: "<FLOATING_IP_1>"  # Replace with FLOATING_IP_1 from above
+    role: "head"                    # Ray head node
+    username: "ubuntu"               # SSH username (usually "ubuntu" for Ubuntu images)
+  
+  # Worker nodes (Ray worker + vLLM server)
+  - name: "ray-node-2"
+    floating_ip: "<FLOATING_IP_2>"  # Replace with FLOATING_IP_2 from above
+    role: "worker"                  # Ray worker node
+    username: "ubuntu"              # SSH username
+
+# SSH configuration
+ssh:
+  key_path: "<SSH_KEY_PATH>"         # Replace with SSH_KEY_PATH from above
+  strict_host_key_checking: false   # Set to false to skip host key verification
+
+# NVIDIA Driver configuration
+driver:
+  install: true                     # Whether to install NVIDIA drivers
+  version: "525"                    # Driver version (525 for A100)
+  reboot_after_install: true        # Reboot after driver installation
+
+# CUDA and PyTorch configuration
+cuda:
+  pytorch_index_url: "https://download.pytorch.org/whl/cu121"  # PyTorch CUDA index
+
+# Ray cluster configuration
+ray:
+  head_port: 6379                   # Ray head port
+  dashboard_port: 8265              # Ray dashboard port
+  dashboard_host: "0.0.0.0"         # Ray dashboard host
+
+# vLLM configuration
+vllm:
+  model: "<VLLM_MODEL>"             # Replace with VLLM_MODEL from above
+  port: 8000                        # vLLM API port
+  max_model_len: 512                # Maximum model length
+  gpu_per_node: 1                   # GPUs to use per node (CUDA_VISIBLE_DEVICES)
+
+# Deployment options
 deployment:
-  num_replicas: 4          # Number of replicas (vLLM instances)
-  gpus_per_replica: 2      # Number of GPUs per replica
-  tensor_parallel_size: 2  # Tensor parallel size within each replica
+  # Whether to skip steps (useful for re-running after partial completion)
+  skip_driver_install: false        # Skip NVIDIA driver installation
+  skip_ray_install: false          # Skip Ray installation
+  skip_vllm_install: false         # Skip vLLM installation
+  skip_ray_cluster: false          # Skip Ray cluster setup
+  skip_vllm_start: false           # Skip vLLM service start
 
-# Service configuration
-service:
-  host: "0.0.0.0"          # Service listening address
-  port: 8000               # Service port
-
-# Notes:
-# 1. Ensure total GPUs >= num_replicas * gpus_per_replica
-# 2. tensor_parallel_size should equal gpus_per_replica
-# 3. Each replica will load the model once, ensure sufficient memory
-
+# Testing configuration
+testing:
+  test_services: true               # Whether to test services after deployment
+  test_timeout: 60                  # Test request timeout in seconds

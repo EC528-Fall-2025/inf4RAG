@@ -9,13 +9,23 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Default configuration
-MODEL_PATH="${MODEL_PATH:-/data/Phi-3-mini-4k-instruct}"
-NUM_REPLICAS="${NUM_REPLICAS:-}"  # Empty means auto-detect
-GPUS_PER_REPLICA="${GPUS_PER_REPLICA:-}"  # Empty means auto-detect
-TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-}"  # Empty means auto-detect
-HOST="${HOST:-0.0.0.0}"
-PORT="${PORT:-8000}"
+# Load configuration from config.yaml
+CONFIG_FILE="${CONFIG_FILE:-config.yaml}"
+if [ -f "$CONFIG_FILE" ]; then
+    echo "Loading configuration from $CONFIG_FILE..."
+    # Source config values from read_config.sh
+    eval "$(bash "$SCRIPT_DIR/read_config.sh" "$CONFIG_FILE")"
+else
+    echo "Warning: Config file not found: $CONFIG_FILE, using defaults"
+    MODEL_PATH="gpt2"
+    NUM_REPLICAS=""
+    GPUS_PER_REPLICA=""
+    TENSOR_PARALLEL_SIZE=""
+    HOST="0.0.0.0"
+    PORT="8000"
+fi
+
+# Allow environment variables and command line to override config.yaml
 AUTO_DETECT="${AUTO_DETECT:-true}"  # Enable auto-detect by default
 
 # Parse command line arguments
@@ -57,19 +67,21 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --model-path PATH          Model path (default: /data/Phi-3-mini-4k-instruct)"
-            echo "  --num-replicas N           Number of replicas (auto-detect if not specified)"
-            echo "  --gpus-per-replica N       Number of GPUs per replica (auto-detect if not specified)"
-            echo "  --tensor-parallel-size N  Tensor parallel size (auto-detect if not specified)"
-            echo "  --host HOST                Service listening address (default: 0.0.0.0)"
-            echo "  --port PORT                Service port (default: 8000)"
+            echo "  --model-path PATH          Model path: Override config.yaml (default: from config.yaml)"
+            echo "  --num-replicas N           Number of replicas (override config.yaml, auto-detect if not specified)"
+            echo "  --gpus-per-replica N       Number of GPUs per replica (override config.yaml, auto-detect if not specified)"
+            echo "  --tensor-parallel-size N  Tensor parallel size (override config.yaml, auto-detect if not specified)"
+            echo "  --host HOST                Service listening address (override config.yaml)"
+            echo "  --port PORT                Service port (override config.yaml)"
             echo "  --auto-detect              Enable auto-detection of GPU configuration (default: enabled)"
             echo "  --no-auto-detect           Disable auto-detection"
             echo ""
-            echo "Environment Variables:"
-            echo "  You can also set the above parameters via environment variables, e.g., MODEL_PATH=/path/to/model $0"
+            echo "Configuration:"
+            echo "  All settings can be configured in config.yaml"
+            echo "  Command line arguments override config.yaml values"
+            echo "  Environment variables also override config.yaml"
             echo ""
-            echo "Note: If --num-replicas or --gpus-per-replica is not specified, the script will"
+            echo "Note: If num-replicas or gpus-per-replica is not in config.yaml, the script will"
             echo "      automatically detect available GPUs and configure the deployment accordingly."
             exit 0
             ;;
@@ -81,10 +93,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check model path
-if [ ! -d "$MODEL_PATH" ] && [ ! -f "$MODEL_PATH" ]; then
-    echo "Error: Model path does not exist: $MODEL_PATH"
-    echo "Please ensure the model path is correct, or use --model-path parameter"
+# Check model path (skip check for HuggingFace model names)
+# HuggingFace model names don't have file paths, so we only check if it's a local path
+if [[ "$MODEL_PATH" == /* ]] && [ ! -d "$MODEL_PATH" ] && [ ! -f "$MODEL_PATH" ]; then
+    echo "Error: Local model path does not exist: $MODEL_PATH"
+    echo "Please ensure the model path is correct, or use a HuggingFace model name (e.g., gpt2)"
     exit 1
 fi
 

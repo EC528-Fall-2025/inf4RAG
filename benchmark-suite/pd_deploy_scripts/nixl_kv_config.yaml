@@ -1,0 +1,11 @@
+# NixLConnector configuration for vLLM disaggregated serving
+connector_type: NixlConnector
+# Prefiller instance config
+prefill:
+  host: localhost
+  port: 5600
+# Decoder instance config
+decode:
+  host: localhost
+  port: 5601
+# Optional: buffer size, UCX options, etc. (add as needed)

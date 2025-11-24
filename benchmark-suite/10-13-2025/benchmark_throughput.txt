@@ -1,2 +1,0 @@
-bench-throughput.sh: line 11: --output-json: command not found
-bench-throughput.sh: line 11: --output-json: command not found

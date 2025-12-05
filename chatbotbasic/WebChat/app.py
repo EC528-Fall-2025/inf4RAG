@@ -82,7 +82,7 @@ MODEL_API_KEY = os.getenv("MODEL_API_KEY", CONFIG.get("api_key", "ec528"))
 
 # --- RAG backend -----------------------------------------------------------
 # RAG_BASE is the base URL *without* the /rag suffix, e.g. http://<ip>:8001
-RAG_BASE = os.getenv("RAG_BASE", CONFIG.get("rag_base", "http://127.0.0.1:8001"))
+RAG_BASE = os.getenv("RAG_SERVICE_URL")  # from podman-compose.yml
 RAG_UPLOAD_FIELD = os.getenv(
     "RAG_UPLOAD_FIELD",
     CONFIG.get("rag_upload_field", "file"),

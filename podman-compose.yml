@@ -12,6 +12,8 @@ services:
       - rag-data:/data
     ports:
       - "8001:8001"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     restart: unless-stopped
     networks:
       - inf4rag-network
@@ -30,6 +32,8 @@ services:
       - rag
     ports:
       - "7860:7860"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     restart: unless-stopped
     networks:
       - inf4rag-network
@@ -41,6 +45,8 @@ services:
     restart: unless-stopped
     ports:
       - "9090:9090"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     volumes:
       - ./deploy/monitoring/prometheus/prometheus-config.yaml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -62,6 +68,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     ports:
       - "3000:3000"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/monitoring/grafana:/etc/grafana/provisioning

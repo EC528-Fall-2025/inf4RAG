@@ -17,7 +17,7 @@ enabled_browsers:
 
 # LLM / model server (vLLM)
 # Point this to your vLLM or OpenAI-compatible endpoint.
-openstack_ip_port: "199.94.61.249:8000"
+openstack_ip_port: "host.containers.internal:8000"
 api_key: "ec528"
 
 # Optional: explicit default model name.
@@ -26,10 +26,9 @@ default_model: "qwen-4b-instruct"
 
 # RAG backend (Flask service)
 # This should be the base URL WITHOUT the /rag suffix.
-rag_base: "http://199.94.61.249:8001"
 rag_upload_field: "file"
 
-temperature: 0.1
+temperature: 0.6
 
 # Agent max steps; used as AGENT_MAX_STEPS in app.py
 max_actions: 5

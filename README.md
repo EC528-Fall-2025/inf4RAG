@@ -20,7 +20,7 @@ Please refer to the [Getting Started Guide](docs/getting-started.md) for detaile
 ```
 ./chatbotbasic/WebChat: Agentic chatbot implementation
 ./RAG: Retrieval-Augmented Generation module
-./benchmark-suite/bench.py: Standardized benchmarking suite for performance testing
+./benchmark-suite/run_and_process.sh: Standardized benchmarking suite for performance testing
 ./deploy: Deployment scripts and configurations for cloud platforms
 ./podman-compose.yml: Podman compose file for container orchestration
 ```

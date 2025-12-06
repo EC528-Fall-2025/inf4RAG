@@ -12,24 +12,8 @@
 | Sprint Demo 5 | [Video](https://youtu.be/uFlpQv9uCWs) | [Slide](https://docs.google.com/presentation/d/18oxq1IHBBZnWGFMnl9pNE8XsUA7HieByX6wQb-Mv79Q/edit?slide=id.p#slide=id.p) |
 | Final Presentation | TBD | TBD |
 
-## Getting Started (WIP)
-- Launch instance on openstack
-    - Make sure "vLLM serve" is a security group
-    - Assign a floating IP
-- Attach volume "All-Models" to instance, with path /dev/vdb
-- SSH using the IP to connect to the instance
-- Mount the volume using
-  `sudo mount -t ext4 /dev/vdb /data`
-- Run vLLM backend with `conda activate vllm`
-- Run `vllm serve /data/Phi-3-mini-4k-instruct --api-key=(API KEY GOES HERE)`
-   - using Phi-3-mini since it is lightweight for demo purposes
-- Modify configuration file (./config.yaml) on local machine and replace IP address
-- Launch chatbot on local machine with `python ./app.py`
-- Observe benchmarking metrics and others in the vLLM backend
-  
-**AFTER DONE USING**
-- Delete instance
-- Make sure to discard floating IPs
+## Getting Started
+Please refer to the [Getting Started Guide](docs/getting-started.md) for detailed instructions on launching an instance, attaching volumes, and running the vLLM backend along with the chatbot and RAG services.
 
 ## Project Structure
 

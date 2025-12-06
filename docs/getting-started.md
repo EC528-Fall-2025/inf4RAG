@@ -53,6 +53,51 @@ vllm serve /data/Qwen3-4B-Instruct-2507 --api-key=ec528 --max-model-len=16384
 ![System Overview](../png/instruction/018.png)
 ![System Overview](../png/instruction/019.png)
 
+## Benchmarking Guide
+**Step 11.5** Benchmarking our vllm model running on port 8000.
+
+### Overview
+The `run_and_process.sh` script provides an automated benchmarking workflow for comparing different vLLM parallelism strategies and configurations. It handles both benchmark execution and results processing in a single command.
+
+### What It Does
+The script automates the following workflow:
+1. **Runs Steady Benchmarks**: Executes steady-state load tests at multiple request rates (2, 4, 8, 16, 32 req/s) for 90 seconds each
+2. **Runs Flood Benchmark**: Executes a flood test where all requests arrive simultaneously to measure peak performance
+3. **Processes Results**: Automatically parses benchmark output and populates metrics into the results CSV
+4. **Archives Data**: Creates compressed archives of all benchmark results for reproducibility
+
+### Supported Experiment Types
+The script supports benchmarking the following parallelism strategies:
+- **tensor-parallelism**: Model distributed across GPUs using tensor parallelism
+- **pipeline-parallelism**: Model distributed using pipeline parallelism
+- **pd-disaggregation**: Prefill-Decode disaggregation with shared storage
+- **pd-disaggregation-nixl**: Prefill-Decode disaggregation using NixL connector
+- **pd-disaggregation-p2p**: Prefill-Decode disaggregation using P2P NCCL connector
+- **data-parallelism**: Multiple replicas of the model for parallel request processing
+
+### Usage
+
+**Basic Usage:**
+```bash
+cd benchmark-suite
+./run_and_process.sh <experiment_set_name>
+```
+
+**Examples:**
+```bash
+# Benchmark tensor parallelism configuration
+./run_and_process.sh tensor-parallelism
+
+PORT=10001 ./run_and_process.sh pd-disaggregation-p2p
+```
+
+### Prerequisites
+Before running benchmarks, ensure:
+1. vLLM server is running and accessible at the specified HOST:PORT
+2. The model is properly loaded and ready to serve requests
+3. You have sufficient disk space for result archives
+4. Python dependencies are installed: `pip install pandas click`
+
 ## Launching the Chatbot and RAG with podman-compose
 **Step 12:** Open a new tab and access to the OpenStack machine, and activate the appropriate environment, then navigate to the project root directory.
 ![System Overview](../png/instruction/020.png)

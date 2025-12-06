@@ -1,0 +1,18 @@
+# Ray Serve + vLLM Deployment Dependencies
+
+# Ray Core and Serve
+ray[serve]>=2.8.0
+
+# vLLM
+vllm>=0.6.0
+
+# Other dependencies
+torch>=2.0.0
+numpy>=1.20.0
+
+# Testing tools (optional)
+requests>=2.31.0
+
+# Configuration file parsing
+pyyaml>=6.0
+

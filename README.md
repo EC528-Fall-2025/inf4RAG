@@ -12,6 +12,9 @@
 | Sprint Demo 5 | [Video](https://youtu.be/uFlpQv9uCWs) | [Slide](https://docs.google.com/presentation/d/18oxq1IHBBZnWGFMnl9pNE8XsUA7HieByX6wQb-Mv79Q/edit?slide=id.p#slide=id.p) |
 | Final Presentation | TBD | TBD |
 
+## Blog Post
+[Analyzing Common Techniques for Efficient Large Language Model Inference on the Cloud](https://medium.com/@kweon10/analyzing-common-techniques-for-efficient-large-language-model-inference-on-the-cloud-f8161226d541?postPublishedType=initial)
+
 ## Getting Started
 Please refer to the [Getting Started Guide](docs/getting-started.md) for detailed instructions on launching an instance, attaching volumes, and running the vLLM backend along with the chatbot and RAG services.
 

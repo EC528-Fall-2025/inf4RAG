@@ -10,7 +10,7 @@
 | Sprint Demo 3 | [Video](https://www.youtube.com/watch?v=B-cUFVQ3fV8) | [Slide](https://docs.google.com/presentation/d/1K8mjWcFrNDsJg8l7XhaECn3zOihUX77A3zC7vWq-dfc/edit?slide=id.p#slide=id.p) |
 | Sprint Demo 4 | [Video](https://youtu.be/ww_i0jRqoWs) | [Slide](https://docs.google.com/presentation/d/1gTOZAZpYl7pMvKpSyjIa4-UtdyC6LqhwaGmSyOOltd8/edit?slide=id.p#slide=id.p) |
 | Sprint Demo 5 | [Video](https://youtu.be/uFlpQv9uCWs) | [Slide](https://docs.google.com/presentation/d/18oxq1IHBBZnWGFMnl9pNE8XsUA7HieByX6wQb-Mv79Q/edit?slide=id.p#slide=id.p) |
-| Final Presentation | TBD | TBD |
+| Final Presentation | [Video](https://youtu.be/x8MP3b-6J_0) | https://docs.google.com/presentation/d/1KVceO-idq8_d3kEc4IyvLsfkDMiD2fZwuFWMcCvoFGk/edit?slide=id.p#slide=id.p |
 
 ## Blog Post
 [Analyzing Common Techniques for Efficient Large Language Model Inference on the Cloud](https://medium.com/@kweon10/analyzing-common-techniques-for-efficient-large-language-model-inference-on-the-cloud-f8161226d541?postPublishedType=initial)
